@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.0.20
+ * Previolet Javascript SDK v1.0.21
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1114,7 +1114,7 @@ var defaultOptions = {
   userStorage: 'user',
   debug: false,
   reqIndex: 1,
-  sdkVersion: '1.0.20',
+  sdkVersion: '1.0.21',
   appVersion: '-',
   defaultConfig: {},
   tokenOverride: false,
@@ -2107,6 +2107,9 @@ class PrevioletSDK {
             }
             return false
           }
+        },
+        getToken: () => {
+          return this.db().__getTokenToUse()
         }
       }
     };

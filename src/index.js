@@ -351,6 +351,10 @@ class PrevioletSDK {
 
             return false
           }
+        },
+
+        getToken: () => {
+          return this.db().__getTokenToUse()
         }
       }
     }
