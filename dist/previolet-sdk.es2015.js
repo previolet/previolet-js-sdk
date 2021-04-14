@@ -1,38 +1,8 @@
 /**
- * Previolet Javascript SDK v1.0.21
+ * Previolet Javascript SDK v1.0.23
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
-
-function getBaseUrl(options, instance) {
-  instance = instance || options.instance;
-  var base_url = options.baseUrl.replace('{{instance}}', instance);
-  base_url = base_url.replace('{{region}}', options.region);
-  return base_url
-}
-function getBaseBucketUrl(options, instance, bucket) {
-  instance = instance || options.instance;
-  var base_url = options.baseUrl.replace('{{instance}}', 'log-' + instance + '-' + bucket);
-  base_url = base_url.replace('{{region}}', options.region);
-  return base_url
-}
-function generateRandomNumber(from, to) {
-  from = from || 100;
-  to = to || 999;
-  return Math.floor((Math.random() * to) + from)
-}
-function urlSerializeObject(obj, prefix) {
-  var str = [], p;
-  for (p in obj) {
-    if (obj.hasOwnProperty(p)) {
-      var k = prefix ? prefix + "[" + p + "]" : p, v = obj[p];
-      str.push((v !== null && typeof v === "object") ?
-        urlSerializeObject(v, k) :
-        encodeURIComponent(k) + "=" + encodeURIComponent(v));
-    }
-  }
-  return str.join("&")
-}
 
 var bind = function bind(fn, thisArg) {
   return function wrap() {
@@ -1101,6 +1071,42 @@ if (typeof overrideAxiosDefaultAdapter !== 'undefined') {
   setAxiosDefaultAdapter(overrideAxiosDefaultAdapter);
 }
 
+function getBaseUrl(options, instance) {
+  instance = instance || options.instance;
+  var base_url = options.baseUrl.replace('{{instance}}', instance);
+  base_url = base_url.replace('{{region}}', options.region);
+  return base_url
+}
+function getBaseBucketUrl(options, instance, bucket) {
+  instance = instance || options.instance;
+  var base_url = options.baseUrl.replace('{{instance}}', 'log-' + instance + '-' + bucket);
+  base_url = base_url.replace('{{region}}', options.region);
+  return base_url
+}
+function generateRandomNumber(from, to) {
+  from = from || 100;
+  to = to || 999;
+  return Math.floor((Math.random() * to) + from)
+}
+function urlSerializeObject(obj, prefix) {
+  var str = [], p;
+  for (p in obj) {
+    if (obj.hasOwnProperty(p)) {
+      var k = prefix ? prefix + "[" + p + "]" : p, v = obj[p];
+      str.push((v !== null && typeof v === "object") ?
+        urlSerializeObject(v, k) :
+        encodeURIComponent(k) + "=" + encodeURIComponent(v));
+    }
+  }
+  return str.join("&")
+}
+function storageEncode(value) {
+  return $window.btoa(unescape(encodeURIComponent(JSON.stringify(value))))
+}
+function storageDecode(value) {
+  return JSON.parse($window.atob(decodeURIComponent(escape(value))))
+}
+
 var defaultOptions = {
   baseUrl: 'https://{{instance}}.{{region}}.previolet.com/v1',
   region: 'eu.west1',
@@ -1114,7 +1120,7 @@ var defaultOptions = {
   userStorage: 'user',
   debug: false,
   reqIndex: 1,
-  sdkVersion: '1.0.21',
+  sdkVersion: '1.0.23',
   appVersion: '-',
   defaultConfig: {},
   tokenOverride: false,
@@ -1124,8 +1130,9 @@ var defaultOptions = {
 
 var apiErrors = {
 	NO_TOKEN: 1,
-  INVALID_TOKEN: 2,
-  TOKEN_DOESNT_MATCH_INSTANCE: 3,
+  TOKEN_DOESNT_MATCH_INSTANCE: 7,
+  TOKEN_EXPIRED: 8,
+  INVALID_TOKEN: 1010,
   NO_AUTH_SUPPORT: 330,
   NO_AUTH_NAME_OR_CHALLENGE: 331,
   INVALID_NAME_OR_CHALLENGE: 332,
@@ -1891,6 +1898,9 @@ class PrevioletSDK {
     let currentUser = null;
     let headers = {};
     this.changeHooks = [];
+    this.onAuthDataCallback = (data) => {
+      return data
+    };
     this.storageApi = StorageFactory(options);
     this.auth = () => {
       return {
@@ -1950,6 +1960,7 @@ class PrevioletSDK {
           };
           return vm.__call('/__/auth', options).then(ret => {
             vm.__checkError(vm, ret);
+            ret = vm.onAuthDataCallback(ret);
             vm.__loadAuthenticationDataFromResponse(ret);
             if (null !== vm.currentUser) {
               vm.__propagateUserState(vm.currentUser);
@@ -1976,6 +1987,7 @@ class PrevioletSDK {
               vm.__propagateUserState(false);
             } else if (ret.result) {
               if (ret.result.token && ret.result.auth) {
+                ret = vm.onAuthDataCallback(ret);
                 vm.__loadAuthenticationDataFromResponse(ret);
                 vm.__propagateUserState(ret.result.auth);
               } else {
@@ -2072,6 +2084,7 @@ class PrevioletSDK {
               vm.auth().logout();
               return
             }
+            ret = vm.onAuthDataCallback(ret);
             vm.__loadAuthenticationDataFromResponse(ret);
             if (null !== vm.currentUser) {
               vm.__propagateUserState(vm.currentUser);
@@ -2106,6 +2119,14 @@ class PrevioletSDK {
               console.log('User is not logged in');
             }
             return false
+          }
+        },
+        onAuthData: (callback) => {
+          if (typeof callback == 'function') {
+            vm.onAuthDataCallback = callback;
+            if (vm.options.debug) {
+              console.log('Replacing onAuthData callback with custom one', callback);
+            }
           }
         },
         getToken: () => {
@@ -2145,7 +2166,7 @@ class PrevioletSDK {
         },
         set(value) {
           currentApp = value;
-          vm.storageApi.setItem(options.applicationStorage, $window.btoa(JSON.stringify(value)));
+          vm.storageApi.setItem(options.applicationStorage, storageEncode(value));
         }
       },
       currentUser: {
@@ -2154,7 +2175,7 @@ class PrevioletSDK {
         },
         set(value) {
           currentUser = value;
-          vm.storageApi.setItem(options.userStorage, $window.btoa(JSON.stringify(value)));
+          vm.storageApi.setItem(options.userStorage, storageEncode(value));
         }
       },
       browserIdentification: {
@@ -2164,7 +2185,7 @@ class PrevioletSDK {
         set(value) {
           value.ts = value.ts || Date.now();
           value.rnd = value.rnd || generateRandomNumber(10000, 99999);
-          vm.storageApi.setItem(options.browserIdentification, $window.btoa(JSON.stringify(value)));
+          vm.storageApi.setItem(options.browserIdentification, storageEncode(value));
         }
       }
     });
@@ -2329,7 +2350,7 @@ class PrevioletSDK {
     var _storage_data = false;
     if (_storage) {
       try {
-        _storage_data = JSON.parse($window.atob(_storage));
+        _storage_data = storageDecode(_storage);
       } catch (e) {
       }
     }
@@ -2340,7 +2361,13 @@ class PrevioletSDK {
       if (context.options.debug) {
         console.log('%cBackend error details', 'color: #FF3333', response);
       }
-      if (response.error_code && (response.error_code == apiErrors.INVALID_TOKEN || response.error_code == apiErrors.TOKEN_DOESNT_MATCH_INSTANCE)) {
+      let logout_on_errors = [
+        apiErrors.NO_TOKEN,
+        apiErrors.TOKEN_DOESNT_MATCH_INSTANCE,
+        apiErrors.TOKEN_EXPIRED,
+        apiErrors.INVALID_TOKEN,
+      ];
+      if (response.error_code && logout_on_errors.indexOf(parseInt(response.error_code)) != -1) {
         if (context.user().data.guest) {
           context.auth().loginAsGuest();
         } else {

@@ -1,4 +1,4 @@
-import { getBaseUrl, generateRandomNumber } from './utils'
+import { getBaseUrl, generateRandomNumber, storageDecode, storageEncode } from './utils'
 import { $window, $navigator, $axios, setAxiosDefaultAdapter } from './globals'
 import defaultOptions from './options'
 import apiErrors from './errors'
@@ -76,6 +76,11 @@ class PrevioletSDK {
     let last_access_token = null
     let headers = {}
     this.changeHooks = []
+
+    this.onAuthDataCallback = (data) => {
+      return data
+    }
+
     this.storageApi = StorageFactory(options)
 
     this.auth = () => {
@@ -154,6 +159,7 @@ class PrevioletSDK {
 
           return vm.__call('/__/auth', options).then(ret => {
             vm.__checkError(vm, ret)
+            ret = vm.onAuthDataCallback(ret)
             vm.__loadAuthenticationDataFromResponse(ret)
 
             if (null !== vm.currentUser) {
@@ -188,6 +194,7 @@ class PrevioletSDK {
               vm.__propagateUserState(false)
             } else if (ret.result) {
               if (ret.result.token && ret.result.auth) {
+                ret = vm.onAuthDataCallback(ret)
                 vm.__loadAuthenticationDataFromResponse(ret)
                 vm.__propagateUserState(ret.result.auth)
               } else {
@@ -307,6 +314,7 @@ class PrevioletSDK {
               return
             }
 
+            ret = vm.onAuthDataCallback(ret)
             vm.__loadAuthenticationDataFromResponse(ret)
 
             if (null !== vm.currentUser) {
@@ -353,6 +361,16 @@ class PrevioletSDK {
           }
         },
 
+        onAuthData: (callback) => {
+          if (typeof callback == 'function') {
+            vm.onAuthDataCallback = callback
+
+            if (vm.options.debug) {
+              console.log('Replacing onAuthData callback with custom one', callback)
+            }
+          }
+        },
+
         getToken: () => {
           return this.db().__getTokenToUse()
         }
@@ -395,7 +413,7 @@ class PrevioletSDK {
         },
         set(value) {
           currentApp = value
-          vm.storageApi.setItem(options.applicationStorage, $window.btoa(JSON.stringify(value)))
+          vm.storageApi.setItem(options.applicationStorage, storageEncode(value))
         }
       },
 
@@ -405,7 +423,7 @@ class PrevioletSDK {
         },
         set(value) {
           currentUser = value
-          vm.storageApi.setItem(options.userStorage, $window.btoa(JSON.stringify(value)))
+          vm.storageApi.setItem(options.userStorage, storageEncode(value))
         }
       },
 
@@ -417,7 +435,7 @@ class PrevioletSDK {
           value.ts = value.ts || Date.now()
           value.rnd = value.rnd || generateRandomNumber(10000, 99999)
 
-          vm.storageApi.setItem(options.browserIdentification, $window.btoa(JSON.stringify(value)))
+          vm.storageApi.setItem(options.browserIdentification, storageEncode(value))
         }
       }
     })
@@ -623,7 +641,7 @@ class PrevioletSDK {
 
     if (_storage) {
       try {
-        _storage_data = JSON.parse($window.atob(_storage))
+        _storage_data = storageDecode(_storage)
       } catch (e) {
       }
     }
@@ -637,7 +655,14 @@ class PrevioletSDK {
         console.log('%cBackend error details', 'color: #FF3333', response)
       }
 
-      if (response.error_code && (response.error_code == apiErrors.INVALID_TOKEN || response.error_code == apiErrors.TOKEN_DOESNT_MATCH_INSTANCE)) {
+      let logout_on_errors = [
+        apiErrors.NO_TOKEN,
+        apiErrors.TOKEN_DOESNT_MATCH_INSTANCE,
+        apiErrors.TOKEN_EXPIRED,
+        apiErrors.INVALID_TOKEN,
+      ]
+
+      if (response.error_code && logout_on_errors.indexOf(parseInt(response.error_code)) != -1) {
         // If the user was logged in as guest, get another token
         if (context.user().data.guest) {
           context.auth().loginAsGuest()

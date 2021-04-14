@@ -1,3 +1,5 @@
+import { $window } from './globals'
+
 export function camelCase(name) {
   return name.replace(/([\:\-\_]+(.))/g, function (_, separator, letter, offset) {
     return offset ? letter.toUpperCase() : letter
@@ -38,4 +40,12 @@ export function urlSerializeObject(obj, prefix) {
     }
   }
   return str.join("&")
+}
+
+export function storageEncode(value) {
+  return $window.btoa(unescape(encodeURIComponent(JSON.stringify(value))))
+}
+
+export function storageDecode(value) {
+  return JSON.parse($window.atob(decodeURIComponent(escape(value))))
 }
