@@ -9,14 +9,15 @@ import StorageApi from './apis/storage'
 import RemoteConfig from './apis/remote-config'
 import Bucket from './apis/bucket'
 import Trace from './apis/trace'
+import packageData from '../package.json'
 
-class PrevioletSDK {
+export default class PrevioletSDK {
 	constructor (overrideOptions) {
     const vm = this
 
     let options = Object.assign({}, defaultOptions, overrideOptions)
     if (options.debug) {
-      console.log('%cPreviolet Javascript SDK instantiated in debug mode', 'color: #CC00FF')
+      console.log(`%cPreviolet Javascript SDK (v${packageData.version}) instantiated in debug mode`, 'color: #CC00FF')
     }
 
     if (options.instance && 
@@ -211,8 +212,8 @@ class PrevioletSDK {
             return Promise.reject(new Error('username required'))
           }
 
-          var origin = params && params.origin ? params.origin : window.location.origin
-          var skip_email = params && params.skip_email ? params.skip_email : false
+          let origin = params && params.origin ? params.origin : window.location.origin
+          let skip_email = params && params.skip_email ? params.skip_email : false
 
           const data = JSON.stringify({
             name,
@@ -340,8 +341,8 @@ class PrevioletSDK {
               }
             }
 
-            var current_user = vm.currentUser
-            var current_token = vm.token
+            let current_user = vm.currentUser
+            let current_token = vm.token
 
             if (vm.options.debug) {
               if (current_user && current_token) {
@@ -434,7 +435,6 @@ class PrevioletSDK {
         set(value) {
           value.ts = value.ts || Date.now()
           value.rnd = value.rnd || generateRandomNumber(10000, 99999)
-
           vm.storageApi.setItem(options.browserIdentification, storageEncode(value))
         }
       }
@@ -448,7 +448,7 @@ class PrevioletSDK {
       }
     }
 
-    var _stored_token = vm.app().token
+    let _stored_token = vm.app().token
     vm.token = _stored_token
 
     let baseline_identification = {
@@ -472,7 +472,7 @@ class PrevioletSDK {
         console.log('Browser identification exists', vm.browserIdentification)
       }
 
-      var match = {
+      let match = {
           ...baseline_identification,
           ts: vm.browserIdentification.ts,
          rnd: vm.browserIdentification.rnd,
@@ -487,32 +487,32 @@ class PrevioletSDK {
       }
     }
 
-    var __db = new DatabaseApi(vm).addToErrorChain(vm, vm.__checkError)
+    let __db = new DatabaseApi(vm).addToErrorChain(vm, vm.__checkError)
     vm.db = () => {
       return __db
     }
 
-    var __functions = new FunctionsApi(vm).addToErrorChain(vm, vm.__checkError)
+    let __functions = new FunctionsApi(vm).addToErrorChain(vm, vm.__checkError)
     vm.functions = () => {
       return __functions
     }
 
-    var __storage = new StorageApi(vm).addToErrorChain(vm, vm.__checkError)
+    let __storage = new StorageApi(vm).addToErrorChain(vm, vm.__checkError)
     vm.storage = () => {
       return __storage
     }
 
-    var __remoteConfig = new RemoteConfig(vm).addToErrorChain(vm, vm.__checkError)
+    let __remoteConfig = new RemoteConfig(vm).addToErrorChain(vm, vm.__checkError)
     vm.remoteConfig = () => {
       return __remoteConfig
     }
 
-    var __bucket = new Bucket(vm).addToErrorChain(vm, vm.__checkError)
+    let __bucket = new Bucket(vm).addToErrorChain(vm, vm.__checkError)
     vm.bucket = () => {
       return __bucket
     }
 
-    var __trace = new Trace(vm).addToErrorChain(vm, vm.__checkError)
+    let __trace = new Trace(vm).addToErrorChain(vm, vm.__checkError)
     vm.trace = () => {
       return __trace
     }
@@ -534,7 +534,7 @@ class PrevioletSDK {
 
     return this.functions().getRemoteConfig().then(config => {
       if (typeof config == 'object') {
-        var merge = vm.options.defaultConfig
+        let merge = vm.options.defaultConfig
         Object.keys(config).forEach(key => {
           merge[key] = config[key]
         })
@@ -613,8 +613,8 @@ class PrevioletSDK {
     instance = instance || this.options.instance
     options.headers = this.getDefaultHeaders()
 
-    var req_id = this.options.reqIndex ++
-    var endpoint = getBaseUrl(this.options, instance) + url
+    let req_id = this.options.reqIndex ++
+    let endpoint = getBaseUrl(this.options, instance) + url
 
     if (this.options.debug) {
       console.log('> XHR Request (' + req_id + ')', endpoint, options)
@@ -636,8 +636,8 @@ class PrevioletSDK {
   __storageGet(key) {
     const vm = this
 
-    var _storage = vm.storageApi.getItem(key)
-    var _storage_data = false
+    let _storage = vm.storageApi.getItem(key)
+    let _storage_data = false
 
     if (_storage) {
       try {
@@ -676,6 +676,7 @@ class PrevioletSDK {
   }
 }
 
+/*
 // UMD (Universal Module Definition)
 // https://github.com/umdjs/umd/blob/master/templates/returnExports.js
 (function (root, factory) {
@@ -698,3 +699,4 @@ class PrevioletSDK {
     // can return a function as the exported value.
     return PrevioletSDK;
 }))
+*/

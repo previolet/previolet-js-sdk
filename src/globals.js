@@ -39,6 +39,7 @@ const $axios = axios
 
 function setAxiosDefaultAdapter(newAdapter) {
   // https://github.com/axios/axios/issues/456
+  // https://stackoverflow.com/questions/62194540/how-to-create-http-requests-with-axios-from-within-v8js
   $axios.defaults.adapter = newAdapter
 }
 

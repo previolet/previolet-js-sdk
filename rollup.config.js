@@ -1,4 +1,5 @@
 import commonjs from '@rollup/plugin-commonjs'
+import babel from '@rollup/plugin-babel'
 import resolve from '@rollup/plugin-node-resolve'
 import json from '@rollup/plugin-json'
 import cleanup from 'rollup-plugin-cleanup'
@@ -46,7 +47,7 @@ const config = {
       file: 'dist/previolet-sdk.es2015.js',
       format: 'es',
       name: 'PrevioletSDK',
-      footer: 'export default PrevioletSDK;',
+      // footer: 'export default PrevioletSDK;',
       exports: 'named'
     },
   ],
@@ -62,6 +63,10 @@ const config = {
     nodePolyfills(),
     cleanup({ comments: 'none' }),
     banner('Previolet Javascript SDK v<%= pkg.version %>\nhttps://github.com/previolet/previolet-js-sdk\nReleased under the MIT License.'),
+    babel({
+      babelHelpers: 'bundled',
+      plugins: ['@babel/plugin-proposal-object-rest-spread', '@babel/plugin-proposal-async-generator-functions'],
+    }),
     replace({
       __SDK_VERSION__: pkg.version
     })
