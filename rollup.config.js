@@ -26,13 +26,19 @@ const config = {
     },
     {
       file: 'demo/previolet-sdk.js',
+      format: 'umd',
+      name: 'PrevioletSDK',
+      exports: 'named'
+    },
+    {
+      file: 'dist/previolet-sdk.iife.js',
       format: 'iife',
       name: 'PrevioletSDK',
       exports: 'named'
     },
     {
-      file: 'dist/previolet-sdk.js',
-      format: 'iife',
+      file: 'dist/previolet-sdk.amd.js',
+      format: 'amd',
       name: 'PrevioletSDK',
       exports: 'named'
     },
@@ -65,7 +71,10 @@ const config = {
     banner('Previolet Javascript SDK v<%= pkg.version %>\nhttps://github.com/previolet/previolet-js-sdk\nReleased under the MIT License.'),
     babel({
       babelHelpers: 'bundled',
-      plugins: ['@babel/plugin-proposal-object-rest-spread', '@babel/plugin-proposal-async-generator-functions'],
+      plugins: [
+        '@babel/plugin-proposal-object-rest-spread', 
+        '@babel/plugin-proposal-async-generator-functions',
+      ],
     }),
     replace({
       __SDK_VERSION__: pkg.version

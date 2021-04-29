@@ -676,6 +676,8 @@ export default class PrevioletSDK {
   }
 }
 
+$window.PrevioletSDK = PrevioletSDK
+
 /*
 // UMD (Universal Module Definition)
 // https://github.com/umdjs/umd/blob/master/templates/returnExports.js
