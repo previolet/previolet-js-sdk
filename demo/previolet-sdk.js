@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.0.25
+ * Previolet Javascript SDK v1.0.26
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1298,6 +1298,8 @@
 
   var axios$1 = axios_1;
 
+  const fakeLocalStorageMap = {};
+  const fakeSessionStorageMap = {};
   const fakeWindow = {
     btoa(a) {
       return a;
@@ -1315,19 +1317,31 @@
       origin: ''
     },
     localStorage: {
-      setItem() {},
+      setItem(key, value) {
+        fakeLocalStorageMap[key] = value;
+      },
 
-      getItem() {},
+      getItem(key) {
+        return fakeLocalStorageMap[key];
+      },
 
-      removeItem() {}
+      removeItem(key) {
+        delete fakeLocalStorageMap[key];
+      }
 
     },
     sessionStorage: {
-      setItem() {},
+      setItem(key, value) {
+        fakeSessionStorageMap[key] = value;
+      },
 
-      getItem() {},
+      getItem(key) {
+        return fakeSessionStorageMap[key];
+      },
 
-      removeItem() {}
+      removeItem(key) {
+        delete fakeSessionStorageMap[key];
+      }
 
     }
   };
@@ -1335,7 +1349,7 @@
     userAgent: null,
     userLanguage: null,
     language: null,
-    platform: null
+    platform: typeof __previoletNamespace !== 'undefined' ? 'psdk:' + __previoletNamespace : null
   };
   const $window = typeof window !== 'undefined' ? window : fakeWindow;
   const $navigator = typeof navigator !== 'undefined' ? navigator : fakeNavigator;
@@ -1400,7 +1414,7 @@
     userStorage: 'user',
     debug: false,
     reqIndex: 1,
-    sdkVersion: '1.0.25',
+    sdkVersion: '1.0.26',
     appVersion: '-',
     defaultConfig: {},
     tokenOverride: false,
@@ -2239,7 +2253,7 @@
   }
 
   var name = "previolet";
-  var version$1 = "1.0.25";
+  var version$1 = "1.0.26";
   var description = "Previolet Javascript SDK";
   var main = "dist/previolet-sdk.js";
   var module = "dist/previolet-sdk.common.js";
@@ -2716,7 +2730,7 @@
 
           set(value) {
             value.ts = value.ts || Date.now();
-            value.rnd = value.rnd || generateRandomNumber(10000, 99999);
+            value.rnd = value.rnd || generateRandomNumber(100000, 999999);
             vm.storageApi.setItem(options.browserIdentification, storageEncode(value));
           }
 
@@ -2740,6 +2754,10 @@
         vsdk: vm.options.sdkVersion,
         vapp: vm.options.appVersion
       };
+
+      if (__previoletRayId) {
+        baseline_identification.ray = __previoletRayId;
+      }
 
       if (!vm.browserIdentification) {
         vm.browserIdentification = _objectSpread2({}, baseline_identification);

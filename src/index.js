@@ -434,7 +434,7 @@ export default class PrevioletSDK {
         },
         set(value) {
           value.ts = value.ts || Date.now()
-          value.rnd = value.rnd || generateRandomNumber(10000, 99999)
+          value.rnd = value.rnd || generateRandomNumber(100000, 999999)
           vm.storageApi.setItem(options.browserIdentification, storageEncode(value))
         }
       }
@@ -459,9 +459,13 @@ export default class PrevioletSDK {
       vapp: vm.options.appVersion,
     }
 
+    if (__previoletRayId) {
+      baseline_identification.ray = __previoletRayId
+    }
+
     // Handle browser identification
     if (! vm.browserIdentification) {
-        vm.browserIdentification = { ...baseline_identification }
+      vm.browserIdentification = { ...baseline_identification }
 
       if (vm.options.debug) {
         console.log('Generating browser identification', vm.browserIdentification)

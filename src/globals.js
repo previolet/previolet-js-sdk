@@ -1,5 +1,8 @@
 import axios from 'axios'
 
+const fakeLocalStorageMap = { }
+const fakeSessionStorageMap = { }
+
 const fakeDocument = {
   createElement() { },
 }
@@ -13,14 +16,14 @@ const fakeWindow = {
     origin: '',
   },
   localStorage: {
-    setItem() { },
-    getItem() { },
-    removeItem() { },
+    setItem(key, value) { fakeLocalStorageMap[key] = value },
+    getItem(key) { return fakeLocalStorageMap[key] },
+    removeItem(key) { delete fakeLocalStorageMap[key] },
   },
   sessionStorage: {
-    setItem() { },
-    getItem() { },
-    removeItem() { },
+    setItem(key, value) { fakeSessionStorageMap[key] = value },
+    getItem(key) { return fakeSessionStorageMap[key] },
+    removeItem(key) { delete fakeSessionStorageMap[key] },
   },
 }
 
@@ -28,7 +31,7 @@ const fakeNavigator = {
   userAgent: null,
   userLanguage: null,
   language: null,
-  platform: null,
+  platform: typeof __previoletNamespace !== 'undefined' ? 'psdk:' + __previoletNamespace : null,
 }
 
 export const $document = typeof document !== 'undefined' ? document : fakeDocument
