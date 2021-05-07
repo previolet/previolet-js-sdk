@@ -37,7 +37,7 @@ export default class Database extends Base {
     })
   }
 
-  get(params, fieldProjection) {
+  getRaw(params, fieldProjection) {
     let append = ''
     params = params || {}
 
@@ -52,6 +52,12 @@ export default class Database extends Base {
 
     return this.__callDatabase(options, append).then(ret => {
       this.__checkError(this, ret)
+      return ret
+    })
+  }
+
+  get(params, fieldProjection) {
+    return this.getRaw(params, fieldProjection).then(ret => {
       return ret.result ? ret.result : []
     })
   }

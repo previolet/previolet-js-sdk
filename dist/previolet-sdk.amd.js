@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.0.27
+ * Previolet Javascript SDK v1.0.28
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1410,7 +1410,7 @@ define(['exports'], function (exports) { 'use strict';
     userStorage: 'user',
     debug: false,
     reqIndex: 1,
-    sdkVersion: '1.0.27',
+    sdkVersion: '1.0.28',
     appVersion: '-',
     defaultConfig: {},
     tokenOverride: false,
@@ -1905,7 +1905,7 @@ define(['exports'], function (exports) { 'use strict';
       });
     }
 
-    get(params, fieldProjection) {
+    getRaw(params, fieldProjection) {
       let append = '';
       params = params || {};
 
@@ -1920,6 +1920,12 @@ define(['exports'], function (exports) { 'use strict';
       return this.__callDatabase(options, append).then(ret => {
         this.__checkError(this, ret);
 
+        return ret;
+      });
+    }
+
+    get(params, fieldProjection) {
+      return this.getRaw(params, fieldProjection).then(ret => {
         return ret.result ? ret.result : [];
       });
     }
@@ -2249,7 +2255,7 @@ define(['exports'], function (exports) { 'use strict';
   }
 
   var name = "previolet";
-  var version$1 = "1.0.27";
+  var version$1 = "1.0.28";
   var description = "Previolet Javascript SDK";
   var main = "dist/previolet-sdk.js";
   var module = "dist/previolet-sdk.common.js";
