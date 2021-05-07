@@ -459,7 +459,7 @@ export default class PrevioletSDK {
       vapp: vm.options.appVersion,
     }
 
-    if (__previoletRayId) {
+    if (typeof __previoletRayId !== 'undefined') {
       baseline_identification.ray = __previoletRayId
     }
 
