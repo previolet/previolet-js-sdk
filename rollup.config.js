@@ -44,7 +44,7 @@ const config = {
     },
     {
       file: 'dist/previolet-sdk.min.js',
-      format: 'iife',
+      format: 'umd',
       name: 'PrevioletSDK',
       plugins: [terser()],
       exports: 'named'
