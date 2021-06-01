@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.0.28
+ * Previolet Javascript SDK v1.0.29
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1410,7 +1410,7 @@ define(['exports'], function (exports) { 'use strict';
     userStorage: 'user',
     debug: false,
     reqIndex: 1,
-    sdkVersion: '1.0.28',
+    sdkVersion: '1.0.29',
     appVersion: '-',
     defaultConfig: {},
     tokenOverride: false,
@@ -2255,7 +2255,7 @@ define(['exports'], function (exports) { 'use strict';
   }
 
   var name = "previolet";
-  var version$1 = "1.0.28";
+  var version$1 = "1.0.29";
   var description = "Previolet Javascript SDK";
   var main = "dist/previolet-sdk.js";
   var module = "dist/previolet-sdk.common.js";
