@@ -163,6 +163,20 @@ export default class Database extends Base {
     })
   }
 
+  getStructure(params) {
+    params = params || {}
+
+    const options = {
+      method: 'GET',
+      params,
+    }
+
+    return this.__callDatabase(options, '/structure').then(ret => {
+      this.__checkError(this, ret)
+      return ret.result ? ret.result : []
+    })
+  }
+
   getFilters(params) {
     params = params || {}
 

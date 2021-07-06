@@ -121,6 +121,9 @@ export default class PrevioletSDK {
           // Remove token from storage
           vm.token = false
 
+          // Remove user data
+          vm.currentUser = null
+
           vm.storageApi.removeItem(vm.options.tokenName)
           vm.storageApi.removeItem(vm.options.applicationStorage)
           vm.storageApi.removeItem(vm.options.userStorage)
@@ -160,6 +163,12 @@ export default class PrevioletSDK {
 
           return vm.__call('/__/auth', options).then(ret => {
             vm.__checkError(vm, ret)
+
+            if (ret && ret.result && ret.result.emailSent) {
+              // we only sent a login with pin request, nothing else to do
+              return ret.result
+            }
+
             ret = vm.onAuthDataCallback(ret)
             vm.__loadAuthenticationDataFromResponse(ret)
 
@@ -205,6 +214,14 @@ export default class PrevioletSDK {
 
             return ret.result
           })
+        },
+
+        loginWithUsernameAndPin: (name, challenge) => {
+          return vm.auth().loginWithUsernameAndPassword(name, '_pin:' + challenge)
+        },
+
+        sendLoginPin: (name) => {
+          return vm.auth().loginWithUsernameAndPassword(name, '_sendEmailPin')
         },
 
         forgotPassword: (name, params) => {
@@ -374,6 +391,10 @@ export default class PrevioletSDK {
 
         getToken: () => {
           return this.db().__getTokenToUse()
+        },
+
+        getCurrentUser: () => {
+          return this.currentUser
         }
       }
     }
@@ -437,6 +458,17 @@ export default class PrevioletSDK {
           value.rnd = value.rnd || generateRandomNumber(100000, 999999)
           vm.storageApi.setItem(options.browserIdentification, storageEncode(value))
         }
+      },
+
+      displayMode: {
+        get() {
+          let display = 'browser'
+          const mqStandAlone = '(display-mode: standalone)'
+          if (navigator.standalone || window.matchMedia(mqStandAlone).matches) {
+            display = 'standalone'
+          }
+          return display
+        }
       }
     })
 
@@ -451,12 +483,15 @@ export default class PrevioletSDK {
     let _stored_token = vm.app().token
     vm.token = _stored_token
 
+    // Include display mode in the identification
+
     let baseline_identification = {
         ua: $navigator.userAgent,
       lang: $navigator.language || $navigator.userLanguage,
       plat: $navigator.platform,
       vsdk: vm.options.sdkVersion,
       vapp: vm.options.appVersion,
+      dspm: vm.displayMode,
     }
 
     if (typeof __previoletRayId !== 'undefined') {

@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.0.30
+ * Previolet Javascript SDK v1.0.31
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1410,7 +1410,7 @@ define(['exports'], function (exports) { 'use strict';
     userStorage: 'user',
     debug: false,
     reqIndex: 1,
-    sdkVersion: '1.0.30',
+    sdkVersion: '1.0.31',
     appVersion: '-',
     defaultConfig: {},
     tokenOverride: false,
@@ -2022,6 +2022,19 @@ define(['exports'], function (exports) { 'use strict';
       });
     }
 
+    getStructure(params) {
+      params = params || {};
+      const options = {
+        method: 'GET',
+        params
+      };
+      return this.__callDatabase(options, '/structure').then(ret => {
+        this.__checkError(this, ret);
+
+        return ret.result ? ret.result : [];
+      });
+    }
+
     getFilters(params) {
       params = params || {};
       const options = {
@@ -2255,7 +2268,7 @@ define(['exports'], function (exports) { 'use strict';
   }
 
   var name = "previolet";
-  var version$1 = "1.0.30";
+  var version$1 = "1.0.31";
   var description = "Previolet Javascript SDK";
   var main = "dist/previolet-sdk.js";
   var module = "dist/previolet-sdk.common.js";
@@ -2432,6 +2445,7 @@ define(['exports'], function (exports) { 'use strict';
             };
             if (vm.options.debug) console.log('Logging Out');
             vm.token = false;
+            vm.currentUser = null;
             vm.storageApi.removeItem(vm.options.tokenName);
             vm.storageApi.removeItem(vm.options.applicationStorage);
             vm.storageApi.removeItem(vm.options.userStorage);
@@ -2468,6 +2482,10 @@ define(['exports'], function (exports) { 'use strict';
             };
             return vm.__call('/__/auth', options).then(ret => {
               vm.__checkError(vm, ret);
+
+              if (ret && ret.result && ret.result.emailSent) {
+                return ret.result;
+              }
 
               ret = vm.onAuthDataCallback(ret);
 
@@ -2514,6 +2532,12 @@ define(['exports'], function (exports) { 'use strict';
 
               return ret.result;
             });
+          },
+          loginWithUsernameAndPin: (name, challenge) => {
+            return vm.auth().loginWithUsernameAndPassword(name, '_pin:' + challenge);
+          },
+          sendLoginPin: name => {
+            return vm.auth().loginWithUsernameAndPassword(name, '_sendEmailPin');
           },
           forgotPassword: (name, params) => {
             if (!name) {
@@ -2667,6 +2691,9 @@ define(['exports'], function (exports) { 'use strict';
           },
           getToken: () => {
             return this.db().__getTokenToUse();
+          },
+          getCurrentUser: () => {
+            return this.currentUser;
           }
         };
       };
@@ -2736,6 +2763,19 @@ define(['exports'], function (exports) { 'use strict';
             vm.storageApi.setItem(options.browserIdentification, storageEncode(value));
           }
 
+        },
+        displayMode: {
+          get() {
+            let display = 'browser';
+            const mqStandAlone = '(display-mode: standalone)';
+
+            if (navigator.standalone || window.matchMedia(mqStandAlone).matches) {
+              display = 'standalone';
+            }
+
+            return display;
+          }
+
         }
       });
 
@@ -2754,7 +2794,8 @@ define(['exports'], function (exports) { 'use strict';
         lang: $navigator.language || $navigator.userLanguage,
         plat: $navigator.platform,
         vsdk: vm.options.sdkVersion,
-        vapp: vm.options.appVersion
+        vapp: vm.options.appVersion,
+        dspm: vm.displayMode
       };
 
       if (typeof __previoletRayId !== 'undefined') {

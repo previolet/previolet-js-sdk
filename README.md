@@ -20,7 +20,7 @@ $ npm install --save previolet
 In your code, you can initialize the SDK using:
 
 ```js
-var PrevioletSDK = require('previolet')
+var PrevioletSDK = require('previolet').default
 var sdk = new PrevioletSDK({
   instance: 'cXXXXXXXX',
   region: 'eu.west1',           // Application region (optional)
