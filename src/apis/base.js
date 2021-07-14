@@ -54,8 +54,8 @@ export default class Base {
   }
 
   __call(url, options) {
-    var __token = this.__getTokenToUse()
-    var __identification = this.sdk.browserIdentification
+    let __token = this.__getTokenToUse()
+    let __identification = this.sdk.browserIdentification
 
     if (this.sdk.options.debug) {
       console.log('Using Identification', __identification)
@@ -66,8 +66,8 @@ export default class Base {
       'Identification': $window.btoa(JSON.stringify(__identification)),
     })
 
-    var endpoint = getBaseUrl(this.sdk.options) + url
-    var req_id = this.sdk.options.reqIndex ++
+    let endpoint = getBaseUrl(this.sdk.options) + url
+    let req_id = this.sdk.options.reqIndex ++
 
     if (this.sdk.options.debug) {
       console.log('> XHR Request (' + req_id + ', ' + __token + '): ', endpoint, options)
@@ -92,8 +92,8 @@ export default class Base {
   }
 
   __call_log(bucket, options) {
-    var endpoint = getBaseBucketUrl(this.sdk.options, null, bucket).replace('/v1', '/')
-    var req_id = this.sdk.options.reqIndex ++
+    let endpoint = getBaseBucketUrl(this.sdk.options, null, bucket).replace('/v1', '/')
+    let req_id = this.sdk.options.reqIndex ++
 
     if (this.sdk.options.debug) {
       console.log('> XHR Bucket Request (' + req_id + '): ', endpoint)

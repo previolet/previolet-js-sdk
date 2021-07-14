@@ -7,6 +7,14 @@ export default class Database extends Base {
     this.currentDatabase = null
   }
 
+  serverInfo() {
+    const options = {
+      method: 'GET',
+    }
+
+    return this.__call('/__/server', options).then(ret => ret.result)
+  }
+
   getAll() {
     const options = {
       method: 'GET',

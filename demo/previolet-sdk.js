@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.0.31
+ * Previolet Javascript SDK v1.0.32
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1414,7 +1414,7 @@
     userStorage: 'user',
     debug: false,
     reqIndex: 1,
-    sdkVersion: '1.0.31',
+    sdkVersion: '1.0.32',
     appVersion: '-',
     defaultConfig: {},
     tokenOverride: false,
@@ -1797,9 +1797,9 @@
     }
 
     __call(url, options) {
-      var __token = this.__getTokenToUse();
+      let __token = this.__getTokenToUse();
 
-      var __identification = this.sdk.browserIdentification;
+      let __identification = this.sdk.browserIdentification;
 
       if (this.sdk.options.debug) {
         console.log('Using Identification', __identification);
@@ -1809,8 +1809,8 @@
         'Authorization': __token,
         'Identification': $window.btoa(JSON.stringify(__identification))
       });
-      var endpoint = getBaseUrl(this.sdk.options) + url;
-      var req_id = this.sdk.options.reqIndex++;
+      let endpoint = getBaseUrl(this.sdk.options) + url;
+      let req_id = this.sdk.options.reqIndex++;
 
       if (this.sdk.options.debug) {
         console.log('> XHR Request (' + req_id + ', ' + __token + '): ', endpoint, options);
@@ -1834,8 +1834,8 @@
     }
 
     __call_log(bucket, options) {
-      var endpoint = getBaseBucketUrl(this.sdk.options, null, bucket).replace('/v1', '/');
-      var req_id = this.sdk.options.reqIndex++;
+      let endpoint = getBaseBucketUrl(this.sdk.options, null, bucket).replace('/v1', '/');
+      let req_id = this.sdk.options.reqIndex++;
 
       if (this.sdk.options.debug) {
         console.log('> XHR Bucket Request (' + req_id + '): ', endpoint);
@@ -1878,6 +1878,13 @@
     constructor(sdk) {
       super(sdk);
       this.currentDatabase = null;
+    }
+
+    serverInfo() {
+      const options = {
+        method: 'GET'
+      };
+      return this.__call('/__/server', options).then(ret => ret.result);
     }
 
     getAll() {
@@ -2272,7 +2279,7 @@
   }
 
   var name = "previolet";
-  var version$1 = "1.0.31";
+  var version$1 = "1.0.32";
   var description = "Previolet Javascript SDK";
   var main = "dist/previolet-sdk.js";
   var module = "dist/previolet-sdk.common.js";
