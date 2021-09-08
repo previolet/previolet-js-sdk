@@ -220,6 +220,28 @@ export default class PrevioletSDK {
           return vm.auth().loginWithUsernameAndPassword(name, '_pin:' + challenge)
         },
 
+        refreshUserInformation: () => {
+          if (! vm.auth().isAuthenticated()) {
+            if (this.options.debug) console.log('There is no authenticated user')
+            return false
+          }
+
+          const data = JSON.stringify({
+            token: vm.token
+          })
+
+          return vm.__call(`/__/token?token=${vm.token}`).then(ret => {
+            if (ret && ret.result && ret.result.auth) {
+              vm.currentUser = ret.result.auth
+              if (vm.options.debug) console.log('Updating user data with', vm.currentUser)
+
+              return vm.currentUser
+            } else {
+              return false
+            }
+          })
+        },
+
         sendLoginPin: (name) => {
           return vm.auth().loginWithUsernameAndPassword(name, '_sendEmailPin')
         },
@@ -491,6 +513,7 @@ export default class PrevioletSDK {
       plat: $navigator.platform,
       vsdk: vm.options.sdkVersion,
       vapp: vm.options.appVersion,
+       ver: vm.options.version,
       dspm: vm.displayMode,
     }
 
@@ -650,6 +673,7 @@ export default class PrevioletSDK {
 
   __call(url, options, instance) {
     instance = instance || this.options.instance
+    options = options || {}
     options.headers = this.getDefaultHeaders()
 
     let req_id = this.options.reqIndex ++

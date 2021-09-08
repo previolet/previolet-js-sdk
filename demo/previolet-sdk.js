@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.0.32
+ * Previolet Javascript SDK v1.0.33
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1367,12 +1367,14 @@
     instance = instance || options.instance;
     var base_url = options.baseUrl.replace('{{instance}}', instance);
     base_url = base_url.replace('{{region}}', options.region);
+    base_url = base_url.replace('{{version}}', options.version);
     return base_url;
   }
   function getBaseBucketUrl(options, instance, bucket) {
     instance = instance || options.instance;
     var base_url = options.baseUrl.replace('{{instance}}', 'log-' + instance + '-' + bucket);
     base_url = base_url.replace('{{region}}', options.region);
+    base_url = base_url.replace('{{version}}', options.version);
     return base_url;
   }
   function generateRandomNumber(from, to) {
@@ -1402,8 +1404,9 @@
   }
 
   var defaultOptions = {
-    baseUrl: 'https://{{instance}}.{{region}}.previolet.com/v1',
+    baseUrl: 'https://{{instance}}.{{region}}.previolet.com/{{version}}',
     region: 'eu.west1',
+    version: 'v1',
     guestTokenExpiration: 3600,
     userTokenExpiration: 86400 * 10,
     storageType: 'localStorage',
@@ -1414,7 +1417,7 @@
     userStorage: 'user',
     debug: false,
     reqIndex: 1,
-    sdkVersion: '1.0.32',
+    sdkVersion: '1.0.33',
     appVersion: '-',
     defaultConfig: {},
     tokenOverride: false,
@@ -2279,7 +2282,7 @@
   }
 
   var name = "previolet";
-  var version$1 = "1.0.32";
+  var version$1 = "1.0.33";
   var description = "Previolet Javascript SDK";
   var main = "dist/previolet-sdk.js";
   var module = "dist/previolet-sdk.common.js";
@@ -2547,6 +2550,25 @@
           loginWithUsernameAndPin: (name, challenge) => {
             return vm.auth().loginWithUsernameAndPassword(name, '_pin:' + challenge);
           },
+          refreshUserInformation: () => {
+            if (!vm.auth().isAuthenticated()) {
+              if (this.options.debug) console.log('There is no authenticated user');
+              return false;
+            }
+
+            const data = JSON.stringify({
+              token: vm.token
+            });
+            return vm.__call(`/__/token?token=${vm.token}`).then(ret => {
+              if (ret && ret.result && ret.result.auth) {
+                vm.currentUser = ret.result.auth;
+                if (vm.options.debug) console.log('Updating user data with', vm.currentUser);
+                return vm.currentUser;
+              } else {
+                return false;
+              }
+            });
+          },
           sendLoginPin: name => {
             return vm.auth().loginWithUsernameAndPassword(name, '_sendEmailPin');
           },
@@ -2806,6 +2828,7 @@
         plat: $navigator.platform,
         vsdk: vm.options.sdkVersion,
         vapp: vm.options.appVersion,
+        ver: vm.options.version,
         dspm: vm.displayMode
       };
 
@@ -2966,6 +2989,7 @@
 
     __call(url, options, instance) {
       instance = instance || this.options.instance;
+      options = options || {};
       options.headers = this.getDefaultHeaders();
       let req_id = this.options.reqIndex++;
       let endpoint = getBaseUrl(this.options, instance) + url;
