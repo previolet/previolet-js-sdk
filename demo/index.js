@@ -90,7 +90,6 @@ var router = new VueRouter({
               </div>
             </div>
             <div v-else>
-              <a href="javascript:;" @click="auth(sdk.auth().refreshUserInformation())">Refresh User Information</a>
               <a class="pull-right" href="javascript:;" @click="logout">Logout</a>
               <img class="logo" src="logo.png">
 
