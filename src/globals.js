@@ -1,5 +1,3 @@
-import axios from 'axios'
-
 const fakeLocalStorageMap = { }
 const fakeSessionStorageMap = { }
 
@@ -25,6 +23,7 @@ const fakeWindow = {
     getItem(key) { return fakeSessionStorageMap[key] },
     removeItem(key) { delete fakeSessionStorageMap[key] },
   },
+  isFakeWindow: true,
 }
 
 const fakeNavigator = {
@@ -32,22 +31,9 @@ const fakeNavigator = {
   userLanguage: null,
   language: null,
   platform: typeof __previoletNamespace !== 'undefined' ? 'psdk:' + __previoletNamespace : null,
+  standalone: false,
 }
 
 export const $document = typeof document !== 'undefined' ? document : fakeDocument
-export const $window = typeof window !== 'undefined' ? window : fakeWindow
+export const $window = typeof window !== 'undefined' && typeof window.btoa == 'function' && typeof window.atob == 'function' ? window : fakeWindow
 export const $navigator = typeof navigator !== 'undefined' ? navigator : fakeNavigator
-
-const $axios = axios
-
-function setAxiosDefaultAdapter(newAdapter) {
-  // https://github.com/axios/axios/issues/456
-  // https://stackoverflow.com/questions/62194540/how-to-create-http-requests-with-axios-from-within-v8js
-  $axios.defaults.adapter = newAdapter
-}
-
-if (typeof overrideAxiosDefaultAdapter !== 'undefined') {
-  setAxiosDefaultAdapter(overrideAxiosDefaultAdapter)
-}
-
-export { $axios, setAxiosDefaultAdapter }

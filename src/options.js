@@ -17,5 +17,8 @@ export default {
   defaultConfig: {},
   tokenOverride: false,
   xhrAdapter: null,
-  tokenFallback: false
+  requestAdapterName: null,
+  tokenFallback: false,
+  localStorageObject: null,
+  localStorageEncode: 'complex',
 }

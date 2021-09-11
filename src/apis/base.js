@@ -1,5 +1,5 @@
-import { getBaseUrl, getBaseBucketUrl } from '../utils'
-import { $window, $document, $axios } from '../globals'
+import { getBaseUrl, getBaseBucketUrl, performRequest } from '../utils'
+import { $window, $document } from '../globals'
 
 export default class Base {
   constructor(sdk) {
@@ -70,25 +70,10 @@ export default class Base {
     let req_id = this.sdk.options.reqIndex ++
 
     if (this.sdk.options.debug) {
-      console.log('> XHR Request (' + req_id + ', ' + __token + '): ', endpoint, options)
+      console.log(`> Request (${req_id}, ${__token}):`, endpoint, options)
     }
 
-    return $axios(endpoint, options)
-    .then(ret => {
-      if (this.sdk.options.debug) {
-        console.log('< XHR Response (' + req_id + ')', ret)
-      }
-
-      return ret.data
-    })
-    .catch(err => {
-      if (err.message) {
-        console.log('Error', err.message)
-      } else {
-        console.log('Error', err)
-      }
-      throw err
-    })
+    return performRequest(endpoint, options)
   }
 
   __call_log(bucket, options) {

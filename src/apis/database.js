@@ -109,6 +109,17 @@ export default class Database extends Base {
 
     return this.__callDatabase(options, '/' + id).then(ret => {
       this.__checkError(this, ret)
+
+      if (
+        this.currentDatabase == 'user' && 
+        id == this.sdk.currentUser._id && 
+        ret.result && 
+        ret.result.update && 
+        ret.result.data &&
+        ret.result.data._id == id) {
+        this.sdk.currentUser = ret.result.data
+      }
+
       return ret.result ? ret.result : ret
     })
   }

@@ -1,4 +1,5 @@
 import { $window } from './globals'
+import axios from 'axios'
 
 export function camelCase(name) {
   return name.replace(/([\:\-\_]+(.))/g, function (_, separator, letter, offset) {
@@ -44,10 +45,45 @@ export function urlSerializeObject(obj, prefix) {
   return str.join("&")
 }
 
-export function storageEncode(value) {
-  return $window.btoa(unescape(encodeURIComponent(JSON.stringify(value))))
+export function storageEncode(value, encodingType) {
+  if (encodingType == 'json') {
+    return JSON.stringify(value)
+  } else {
+    return $window.btoa(unescape(encodeURIComponent(JSON.stringify(value))))
+  }
 }
 
-export function storageDecode(value) {
-  return JSON.parse($window.atob(decodeURIComponent(escape(value))))
+export function storageDecode(value, encodingType) {
+  if (encodingType == 'json') {
+    return JSON.parse(value)
+  } else {
+    return JSON.parse($window.atob(decodeURIComponent(escape(value))))
+  }
 }
+
+function performRequest(endpoint, options) {
+  options.responseType = 'json'
+
+  let req = axios(endpoint, options)
+    .then(ret => {
+      return ret.data
+    })
+    .catch(err => {
+      console.log(err)
+      throw err
+    })
+
+  return req
+}
+
+function setAxiosDefaultAdapter(newAdapter) {
+  // https://github.com/axios/axios/issues/456
+  // https://stackoverflow.com/questions/62194540/how-to-create-http-requests-with-axios-from-within-v8js
+  axios.defaults.adapter = newAdapter
+}
+
+if (typeof overrideAxiosDefaultAdapter !== 'undefined') {
+  setAxiosDefaultAdapter(overrideAxiosDefaultAdapter)
+}
+
+export { performRequest, setAxiosDefaultAdapter }

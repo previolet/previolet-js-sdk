@@ -6,6 +6,8 @@ const sdk = new PrevioletSDK({
   instance: DEMO_INSTANCE,
   appVersion: '1.0.0',
   debug: true,
+  // requestAdapterName: 'fetch',
+  // localStorageEncode: 'json'
 })
 
 sdk.remoteConfig().defaultConfig({
@@ -134,6 +136,7 @@ var router = new VueRouter({
             sdk.auth().loginWithUsernameAndPassword(
               'john@obviouslyjoe.com', 
               'demoaccount').catch(err => {
+              console.log(err)
               alert(err)
             })
           },

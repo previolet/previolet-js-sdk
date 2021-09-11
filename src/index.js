@@ -1,5 +1,6 @@
-import { getBaseUrl, generateRandomNumber, storageDecode, storageEncode } from './utils'
-import { $window, $navigator, $axios, setAxiosDefaultAdapter } from './globals'
+import { getBaseUrl, generateRandomNumber, storageDecode, storageEncode, setAxiosDefaultAdapter, performRequest } from './utils'
+import fetchAdapter from './fetchAdapter'
+import { $window, $navigator } from './globals'
 import defaultOptions from './options'
 import apiErrors from './errors'
 import StorageFactory from './storage'
@@ -67,7 +68,19 @@ export default class PrevioletSDK {
       }
     }
 
+    if (options.requestAdapterName == 'fetch') {
+      if (options.debug) {
+        console.log('Switching to fetch axios adapter')
+      }
+
+      setAxiosDefaultAdapter(fetchAdapter)
+    }
+
     if (null !== options.xhrAdapter) {
+      if (options.debug) {
+        console.log('Switching to custom axios adapter')
+      }
+
       setAxiosDefaultAdapter(options.xhrAdapter)
     }
 
@@ -220,28 +233,6 @@ export default class PrevioletSDK {
           return vm.auth().loginWithUsernameAndPassword(name, '_pin:' + challenge)
         },
 
-        refreshUserInformation: () => {
-          if (! vm.auth().isAuthenticated()) {
-            if (this.options.debug) console.log('There is no authenticated user')
-            return false
-          }
-
-          const data = JSON.stringify({
-            token: vm.token
-          })
-
-          return vm.__call(`/__/token?token=${vm.token}`).then(ret => {
-            if (ret && ret.result && ret.result.auth) {
-              vm.currentUser = ret.result.auth
-              if (vm.options.debug) console.log('Updating user data with', vm.currentUser)
-
-              return vm.currentUser
-            } else {
-              return false
-            }
-          })
-        },
-
         sendLoginPin: (name) => {
           return vm.auth().loginWithUsernameAndPassword(name, '_sendEmailPin')
         },
@@ -251,7 +242,7 @@ export default class PrevioletSDK {
             return Promise.reject(new Error('username required'))
           }
 
-          let origin = params && params.origin ? params.origin : window.location.origin
+          let origin = params && params.origin ? params.origin : $window.location.origin
           let skip_email = params && params.skip_email ? params.skip_email : false
 
           const data = JSON.stringify({
@@ -457,7 +448,7 @@ export default class PrevioletSDK {
         },
         set(value) {
           currentApp = value
-          vm.storageApi.setItem(options.applicationStorage, storageEncode(value))
+          vm.storageApi.setItem(options.applicationStorage, storageEncode(value, options.localStorageEncode))
         }
       },
 
@@ -467,7 +458,12 @@ export default class PrevioletSDK {
         },
         set(value) {
           currentUser = value
-          vm.storageApi.setItem(options.userStorage, storageEncode(value))
+
+          if (this.options.debug) {
+            console.log('Setting current user information:', value)
+          }
+
+          vm.storageApi.setItem(options.userStorage, storageEncode(value, options.localStorageEncode))
         }
       },
 
@@ -478,7 +474,7 @@ export default class PrevioletSDK {
         set(value) {
           value.ts = value.ts || Date.now()
           value.rnd = value.rnd || generateRandomNumber(100000, 999999)
-          vm.storageApi.setItem(options.browserIdentification, storageEncode(value))
+          vm.storageApi.setItem(options.browserIdentification, storageEncode(value, options.localStorageEncode))
         }
       },
 
@@ -486,7 +482,7 @@ export default class PrevioletSDK {
         get() {
           let display = 'browser'
           const mqStandAlone = '(display-mode: standalone)'
-          if (navigator.standalone || window.matchMedia(mqStandAlone).matches) {
+          if ($navigator.standalone || (typeof $window.matchMedia == 'function' && $window.matchMedia(mqStandAlone).matches)) {
             display = 'standalone'
           }
           return display
@@ -584,6 +580,11 @@ export default class PrevioletSDK {
         data: vm.__storageGet(vm.options.userStorage),
       }
     }
+
+    vm.version = () => {
+      return vm.options.sdkVersion
+    }
+
     vm.currentUser = vm.user().data
   }
 
@@ -671,31 +672,6 @@ export default class PrevioletSDK {
     }
   }
 
-  __call(url, options, instance) {
-    instance = instance || this.options.instance
-    options = options || {}
-    options.headers = this.getDefaultHeaders()
-
-    let req_id = this.options.reqIndex ++
-    let endpoint = getBaseUrl(this.options, instance) + url
-
-    if (this.options.debug) {
-      console.log('> XHR Request (' + req_id + ')', endpoint, options)
-    }
-
-    return $axios(endpoint, options)
-      .then(ret => {
-        if (this.options.debug) {
-          console.log('< XHR Response (' + req_id + ')', ret)
-        }
-
-        return ret.data
-      })
-      .catch(err => {
-        throw err
-      })
-  }
-
   __storageGet(key) {
     const vm = this
 
@@ -704,7 +680,7 @@ export default class PrevioletSDK {
 
     if (_storage) {
       try {
-        _storage_data = storageDecode(_storage)
+        _storage_data = storageDecode(_storage, vm.options.localStorageEncode)
       } catch (e) {
       }
     }
@@ -736,6 +712,21 @@ export default class PrevioletSDK {
 
       throw response
     }
+  }
+
+  __call(url, options, instance) {
+    instance = instance || this.options.instance
+    options = options || {}
+    options.headers = this.getDefaultHeaders()
+
+    let req_id = this.options.reqIndex ++
+    let endpoint = getBaseUrl(this.options, instance) + url
+
+    if (this.options.debug) {
+      console.log(`> Request (${req_id})`, endpoint, options)
+    }
+
+    return performRequest(endpoint, options)
   }
 }
 

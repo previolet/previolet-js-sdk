@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.0.33
+ * Previolet Javascript SDK v1.0.43
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -166,6 +166,64 @@ function _objectSpread2(target) {
   return target;
 }
 
+const fakeLocalStorageMap = {};
+const fakeSessionStorageMap = {};
+const fakeWindow = {
+  btoa(a) {
+    return a;
+  },
+
+  atob(a) {
+    return a;
+  },
+
+  setInterval() {},
+
+  open() {},
+
+  location: {
+    origin: ''
+  },
+  localStorage: {
+    setItem(key, value) {
+      fakeLocalStorageMap[key] = value;
+    },
+
+    getItem(key) {
+      return fakeLocalStorageMap[key];
+    },
+
+    removeItem(key) {
+      delete fakeLocalStorageMap[key];
+    }
+
+  },
+  sessionStorage: {
+    setItem(key, value) {
+      fakeSessionStorageMap[key] = value;
+    },
+
+    getItem(key) {
+      return fakeSessionStorageMap[key];
+    },
+
+    removeItem(key) {
+      delete fakeSessionStorageMap[key];
+    }
+
+  },
+  isFakeWindow: true
+};
+const fakeNavigator = {
+  userAgent: null,
+  userLanguage: null,
+  language: null,
+  platform: typeof __previoletNamespace !== 'undefined' ? 'psdk:' + __previoletNamespace : null,
+  standalone: false
+};
+const $window = typeof window !== 'undefined' && typeof window.btoa == 'function' && typeof window.atob == 'function' ? window : fakeWindow;
+const $navigator = typeof navigator !== 'undefined' ? navigator : fakeNavigator;
+
 var bind = function bind(fn, thisArg) {
   return function wrap() {
     var args = new Array(arguments.length);
@@ -224,6 +282,15 @@ function isObject(val) {
   return val !== null && typeof val === 'object';
 }
 
+function isPlainObject(val) {
+  if (toString.call(val) !== '[object Object]') {
+    return false;
+  }
+
+  var prototype = Object.getPrototypeOf(val);
+  return prototype === null || prototype === Object.prototype;
+}
+
 function isDate(val) {
   return toString.call(val) === '[object Date]';
 }
@@ -249,7 +316,7 @@ function isURLSearchParams(val) {
 }
 
 function trim(str) {
-  return str.replace(/^\s*/, '').replace(/\s*$/, '');
+  return str.trim ? str.trim() : str.replace(/^\s+|\s+$/g, '');
 }
 
 function isStandardBrowserEnv() {
@@ -286,28 +353,12 @@ function merge() {
   var result = {};
 
   function assignValue(val, key) {
-    if (typeof result[key] === 'object' && typeof val === 'object') {
+    if (isPlainObject(result[key]) && isPlainObject(val)) {
       result[key] = merge(result[key], val);
-    } else {
-      result[key] = val;
-    }
-  }
-
-  for (var i = 0, l = arguments.length; i < l; i++) {
-    forEach(arguments[i], assignValue);
-  }
-
-  return result;
-}
-
-function deepMerge() {
-  var result = {};
-
-  function assignValue(val, key) {
-    if (typeof result[key] === 'object' && typeof val === 'object') {
-      result[key] = deepMerge(result[key], val);
-    } else if (typeof val === 'object') {
-      result[key] = deepMerge({}, val);
+    } else if (isPlainObject(val)) {
+      result[key] = merge({}, val);
+    } else if (isArray(val)) {
+      result[key] = val.slice();
     } else {
       result[key] = val;
     }
@@ -331,6 +382,14 @@ function extend(a, b, thisArg) {
   return a;
 }
 
+function stripBOM(content) {
+  if (content.charCodeAt(0) === 0xFEFF) {
+    content = content.slice(1);
+  }
+
+  return content;
+}
+
 var utils = {
   isArray: isArray,
   isArrayBuffer: isArrayBuffer,
@@ -340,6 +399,7 @@ var utils = {
   isString: isString,
   isNumber: isNumber,
   isObject: isObject,
+  isPlainObject: isPlainObject,
   isUndefined: isUndefined,
   isDate: isDate,
   isFile: isFile,
@@ -350,13 +410,13 @@ var utils = {
   isStandardBrowserEnv: isStandardBrowserEnv,
   forEach: forEach,
   merge: merge,
-  deepMerge: deepMerge,
   extend: extend,
-  trim: trim
+  trim: trim,
+  stripBOM: stripBOM
 };
 
 function encode(val) {
-  return encodeURIComponent(val).replace(/%40/gi, '@').replace(/%3A/gi, ':').replace(/%24/g, '$').replace(/%2C/gi, ',').replace(/%20/g, '+').replace(/%5B/gi, '[').replace(/%5D/gi, ']');
+  return encodeURIComponent(val).replace(/%3A/gi, ':').replace(/%24/g, '$').replace(/%2C/gi, ',').replace(/%20/g, '+').replace(/%5B/gi, '[').replace(/%5D/gi, ']');
 }
 
 var buildURL = function buildURL(url, params, paramsSerializer) {
@@ -413,10 +473,12 @@ function InterceptorManager() {
   this.handlers = [];
 }
 
-InterceptorManager.prototype.use = function use(fulfilled, rejected) {
+InterceptorManager.prototype.use = function use(fulfilled, rejected, options) {
   this.handlers.push({
     fulfilled: fulfilled,
-    rejected: rejected
+    rejected: rejected,
+    synchronous: options ? options.synchronous : false,
+    runWhen: options ? options.runWhen : null
   });
   return this.handlers.length - 1;
 };
@@ -436,17 +498,6 @@ InterceptorManager.prototype.forEach = function forEach(fn) {
 };
 
 var InterceptorManager_1 = InterceptorManager;
-
-var transformData = function transformData(data, headers, fns) {
-  utils.forEach(fns, function transform(fn) {
-    data = fn(data, headers);
-  });
-  return data;
-};
-
-var isCancel = function isCancel(value) {
-  return !!(value && value.__CANCEL__);
-};
 
 var global$1 = typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {};
 
@@ -701,7 +752,7 @@ var enhanceError = function enhanceError(error, config, code, request, response)
   error.response = response;
   error.isAxiosError = true;
 
-  error.toJSON = function () {
+  error.toJSON = function toJSON() {
     return {
       message: this.message,
       name: this.name,
@@ -727,12 +778,54 @@ var createError = function createError(message, config, code, request, response)
 var settle = function settle(resolve, reject, response) {
   var validateStatus = response.config.validateStatus;
 
-  if (!validateStatus || validateStatus(response.status)) {
+  if (!response.status || !validateStatus || validateStatus(response.status)) {
     resolve(response);
   } else {
     reject(createError('Request failed with status code ' + response.status, response.config, null, response.request, response));
   }
 };
+
+var cookies = utils.isStandardBrowserEnv() ? function standardBrowserEnv() {
+  return {
+    write: function write(name, value, expires, path, domain, secure) {
+      var cookie = [];
+      cookie.push(name + '=' + encodeURIComponent(value));
+
+      if (utils.isNumber(expires)) {
+        cookie.push('expires=' + new Date(expires).toGMTString());
+      }
+
+      if (utils.isString(path)) {
+        cookie.push('path=' + path);
+      }
+
+      if (utils.isString(domain)) {
+        cookie.push('domain=' + domain);
+      }
+
+      if (secure === true) {
+        cookie.push('secure');
+      }
+
+      document.cookie = cookie.join('; ');
+    },
+    read: function read(name) {
+      var match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
+      return match ? decodeURIComponent(match[3]) : null;
+    },
+    remove: function remove(name) {
+      this.write(name, '', Date.now() - 86400000);
+    }
+  };
+}() : function nonStandardBrowserEnv() {
+  return {
+    write: function write() {},
+    read: function read() {
+      return null;
+    },
+    remove: function remove() {}
+  };
+}();
 
 var isAbsoluteURL = function isAbsoluteURL(url) {
   return /^([a-z][a-z\d\+\-\.]*:)?\/\//i.test(url);
@@ -819,52 +912,11 @@ var isURLSameOrigin = utils.isStandardBrowserEnv() ? function standardBrowserEnv
   };
 }();
 
-var cookies = utils.isStandardBrowserEnv() ? function standardBrowserEnv() {
-  return {
-    write: function write(name, value, expires, path, domain, secure) {
-      var cookie = [];
-      cookie.push(name + '=' + encodeURIComponent(value));
-
-      if (utils.isNumber(expires)) {
-        cookie.push('expires=' + new Date(expires).toGMTString());
-      }
-
-      if (utils.isString(path)) {
-        cookie.push('path=' + path);
-      }
-
-      if (utils.isString(domain)) {
-        cookie.push('domain=' + domain);
-      }
-
-      if (secure === true) {
-        cookie.push('secure');
-      }
-
-      document.cookie = cookie.join('; ');
-    },
-    read: function read(name) {
-      var match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
-      return match ? decodeURIComponent(match[3]) : null;
-    },
-    remove: function remove(name) {
-      this.write(name, '', Date.now() - 86400000);
-    }
-  };
-}() : function nonStandardBrowserEnv() {
-  return {
-    write: function write() {},
-    read: function read() {
-      return null;
-    },
-    remove: function remove() {}
-  };
-}();
-
 var xhr = function xhrAdapter(config) {
   return new Promise(function dispatchXhrRequest(resolve, reject) {
     var requestData = config.data;
     var requestHeaders = config.headers;
+    var responseType = config.responseType;
 
     if (utils.isFormData(requestData)) {
       delete requestHeaders['Content-Type'];
@@ -874,7 +926,7 @@ var xhr = function xhrAdapter(config) {
 
     if (config.auth) {
       var username = config.auth.username || '';
-      var password = config.auth.password || '';
+      var password = config.auth.password ? unescape(encodeURIComponent(config.auth.password)) : '';
       requestHeaders.Authorization = 'Basic ' + btoa(username + ':' + password);
     }
 
@@ -882,17 +934,13 @@ var xhr = function xhrAdapter(config) {
     request.open(config.method.toUpperCase(), buildURL(fullPath, config.params, config.paramsSerializer), true);
     request.timeout = config.timeout;
 
-    request.onreadystatechange = function handleLoad() {
-      if (!request || request.readyState !== 4) {
-        return;
-      }
-
-      if (request.status === 0 && !(request.responseURL && request.responseURL.indexOf('file:') === 0)) {
+    function onloadend() {
+      if (!request) {
         return;
       }
 
       var responseHeaders = 'getAllResponseHeaders' in request ? parseHeaders(request.getAllResponseHeaders()) : null;
-      var responseData = !config.responseType || config.responseType === 'text' ? request.responseText : request.response;
+      var responseData = !responseType || responseType === 'text' || responseType === 'json' ? request.responseText : request.response;
       var response = {
         data: responseData,
         status: request.status,
@@ -903,7 +951,23 @@ var xhr = function xhrAdapter(config) {
       };
       settle(resolve, reject, response);
       request = null;
-    };
+    }
+
+    if ('onloadend' in request) {
+      request.onloadend = onloadend;
+    } else {
+      request.onreadystatechange = function handleLoad() {
+        if (!request || request.readyState !== 4) {
+          return;
+        }
+
+        if (request.status === 0 && !(request.responseURL && request.responseURL.indexOf('file:') === 0)) {
+          return;
+        }
+
+        setTimeout(onloadend);
+      };
+    }
 
     request.onabort = function handleAbort() {
       if (!request) {
@@ -926,13 +990,12 @@ var xhr = function xhrAdapter(config) {
         timeoutErrorMessage = config.timeoutErrorMessage;
       }
 
-      reject(createError(timeoutErrorMessage, config, 'ECONNABORTED', request));
+      reject(createError(timeoutErrorMessage, config, config.transitional && config.transitional.clarifyTimeoutError ? 'ETIMEDOUT' : 'ECONNABORTED', request));
       request = null;
     };
 
     if (utils.isStandardBrowserEnv()) {
-      var cookies$1 = cookies;
-      var xsrfValue = (config.withCredentials || isURLSameOrigin(fullPath)) && config.xsrfCookieName ? cookies$1.read(config.xsrfCookieName) : undefined;
+      var xsrfValue = (config.withCredentials || isURLSameOrigin(fullPath)) && config.xsrfCookieName ? cookies.read(config.xsrfCookieName) : undefined;
 
       if (xsrfValue) {
         requestHeaders[config.xsrfHeaderName] = xsrfValue;
@@ -953,14 +1016,8 @@ var xhr = function xhrAdapter(config) {
       request.withCredentials = !!config.withCredentials;
     }
 
-    if (config.responseType) {
-      try {
-        request.responseType = config.responseType;
-      } catch (e) {
-        if (config.responseType !== 'json') {
-          throw e;
-        }
-      }
+    if (responseType && responseType !== 'json') {
+      request.responseType = config.responseType;
     }
 
     if (typeof config.onDownloadProgress === 'function') {
@@ -983,7 +1040,7 @@ var xhr = function xhrAdapter(config) {
       });
     }
 
-    if (requestData === undefined) {
+    if (!requestData) {
       requestData = null;
     }
 
@@ -1013,7 +1070,27 @@ function getDefaultAdapter() {
   return adapter;
 }
 
+function stringifySafely(rawValue, parser, encoder) {
+  if (utils.isString(rawValue)) {
+    try {
+      (parser || JSON.parse)(rawValue);
+      return utils.trim(rawValue);
+    } catch (e) {
+      if (e.name !== 'SyntaxError') {
+        throw e;
+      }
+    }
+  }
+
+  return (encoder || JSON.stringify)(rawValue);
+}
+
 var defaults = {
+  transitional: {
+    silentJSONParsing: true,
+    forcedJSONParsing: true,
+    clarifyTimeoutError: false
+  },
   adapter: getDefaultAdapter(),
   transformRequest: [function transformRequest(data, headers) {
     normalizeHeaderName(headers, 'Accept');
@@ -1032,18 +1109,31 @@ var defaults = {
       return data.toString();
     }
 
-    if (utils.isObject(data)) {
-      setContentTypeIfUnset(headers, 'application/json;charset=utf-8');
-      return JSON.stringify(data);
+    if (utils.isObject(data) || headers && headers['Content-Type'] === 'application/json') {
+      setContentTypeIfUnset(headers, 'application/json');
+      return stringifySafely(data);
     }
 
     return data;
   }],
   transformResponse: [function transformResponse(data) {
-    if (typeof data === 'string') {
+    var transitional = this.transitional;
+    var silentJSONParsing = transitional && transitional.silentJSONParsing;
+    var forcedJSONParsing = transitional && transitional.forcedJSONParsing;
+    var strictJSONParsing = !silentJSONParsing && this.responseType === 'json';
+
+    if (strictJSONParsing || forcedJSONParsing && utils.isString(data) && data.length) {
       try {
-        data = JSON.parse(data);
-      } catch (e) {}
+        return JSON.parse(data);
+      } catch (e) {
+        if (strictJSONParsing) {
+          if (e.name === 'SyntaxError') {
+            throw enhanceError(e, this, 'E_JSON_PARSE');
+          }
+
+          throw e;
+        }
+      }
     }
 
     return data;
@@ -1052,6 +1142,7 @@ var defaults = {
   xsrfCookieName: 'XSRF-TOKEN',
   xsrfHeaderName: 'X-XSRF-TOKEN',
   maxContentLength: -1,
+  maxBodyLength: -1,
   validateStatus: function validateStatus(status) {
     return status >= 200 && status < 300;
   }
@@ -1069,6 +1160,18 @@ utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
 });
 var defaults_1 = defaults;
 
+var transformData = function transformData(data, headers, fns) {
+  var context = this || defaults_1;
+  utils.forEach(fns, function transform(fn) {
+    data = fn.call(context, data, headers);
+  });
+  return data;
+};
+
+var isCancel = function isCancel(value) {
+  return !!(value && value.__CANCEL__);
+};
+
 function throwIfCancellationRequested(config) {
   if (config.cancelToken) {
     config.cancelToken.throwIfRequested();
@@ -1078,7 +1181,7 @@ function throwIfCancellationRequested(config) {
 var dispatchRequest = function dispatchRequest(config) {
   throwIfCancellationRequested(config);
   config.headers = config.headers || {};
-  config.data = transformData(config.data, config.headers, config.transformRequest);
+  config.data = transformData.call(config, config.data, config.headers, config.transformRequest);
   config.headers = utils.merge(config.headers.common || {}, config.headers[config.method] || {}, config.headers);
   utils.forEach(['delete', 'get', 'head', 'post', 'put', 'patch', 'common'], function cleanHeaderConfig(method) {
     delete config.headers[method];
@@ -1086,14 +1189,14 @@ var dispatchRequest = function dispatchRequest(config) {
   var adapter = config.adapter || defaults_1.adapter;
   return adapter(config).then(function onAdapterResolution(response) {
     throwIfCancellationRequested(config);
-    response.data = transformData(response.data, response.headers, config.transformResponse);
+    response.data = transformData.call(config, response.data, response.headers, config.transformResponse);
     return response;
   }, function onAdapterRejection(reason) {
     if (!isCancel(reason)) {
       throwIfCancellationRequested(config);
 
       if (reason && reason.response) {
-        reason.response.data = transformData(reason.response.data, reason.response.headers, config.transformResponse);
+        reason.response.data = transformData.call(config, reason.response.data, reason.response.headers, config.transformResponse);
       }
     }
 
@@ -1104,45 +1207,286 @@ var dispatchRequest = function dispatchRequest(config) {
 var mergeConfig = function mergeConfig(config1, config2) {
   config2 = config2 || {};
   var config = {};
-  var valueFromConfig2Keys = ['url', 'method', 'params', 'data'];
-  var mergeDeepPropertiesKeys = ['headers', 'auth', 'proxy'];
-  var defaultToConfig2Keys = ['baseURL', 'url', 'transformRequest', 'transformResponse', 'paramsSerializer', 'timeout', 'withCredentials', 'adapter', 'responseType', 'xsrfCookieName', 'xsrfHeaderName', 'onUploadProgress', 'onDownloadProgress', 'maxContentLength', 'validateStatus', 'maxRedirects', 'httpAgent', 'httpsAgent', 'cancelToken', 'socketPath'];
+  var valueFromConfig2Keys = ['url', 'method', 'data'];
+  var mergeDeepPropertiesKeys = ['headers', 'auth', 'proxy', 'params'];
+  var defaultToConfig2Keys = ['baseURL', 'transformRequest', 'transformResponse', 'paramsSerializer', 'timeout', 'timeoutMessage', 'withCredentials', 'adapter', 'responseType', 'xsrfCookieName', 'xsrfHeaderName', 'onUploadProgress', 'onDownloadProgress', 'decompress', 'maxContentLength', 'maxBodyLength', 'maxRedirects', 'transport', 'httpAgent', 'httpsAgent', 'cancelToken', 'socketPath', 'responseEncoding'];
+  var directMergeKeys = ['validateStatus'];
+
+  function getMergedValue(target, source) {
+    if (utils.isPlainObject(target) && utils.isPlainObject(source)) {
+      return utils.merge(target, source);
+    } else if (utils.isPlainObject(source)) {
+      return utils.merge({}, source);
+    } else if (utils.isArray(source)) {
+      return source.slice();
+    }
+
+    return source;
+  }
+
+  function mergeDeepProperties(prop) {
+    if (!utils.isUndefined(config2[prop])) {
+      config[prop] = getMergedValue(config1[prop], config2[prop]);
+    } else if (!utils.isUndefined(config1[prop])) {
+      config[prop] = getMergedValue(undefined, config1[prop]);
+    }
+  }
+
   utils.forEach(valueFromConfig2Keys, function valueFromConfig2(prop) {
-    if (typeof config2[prop] !== 'undefined') {
-      config[prop] = config2[prop];
+    if (!utils.isUndefined(config2[prop])) {
+      config[prop] = getMergedValue(undefined, config2[prop]);
     }
   });
-  utils.forEach(mergeDeepPropertiesKeys, function mergeDeepProperties(prop) {
-    if (utils.isObject(config2[prop])) {
-      config[prop] = utils.deepMerge(config1[prop], config2[prop]);
-    } else if (typeof config2[prop] !== 'undefined') {
-      config[prop] = config2[prop];
-    } else if (utils.isObject(config1[prop])) {
-      config[prop] = utils.deepMerge(config1[prop]);
-    } else if (typeof config1[prop] !== 'undefined') {
-      config[prop] = config1[prop];
-    }
-  });
+  utils.forEach(mergeDeepPropertiesKeys, mergeDeepProperties);
   utils.forEach(defaultToConfig2Keys, function defaultToConfig2(prop) {
-    if (typeof config2[prop] !== 'undefined') {
-      config[prop] = config2[prop];
-    } else if (typeof config1[prop] !== 'undefined') {
-      config[prop] = config1[prop];
+    if (!utils.isUndefined(config2[prop])) {
+      config[prop] = getMergedValue(undefined, config2[prop]);
+    } else if (!utils.isUndefined(config1[prop])) {
+      config[prop] = getMergedValue(undefined, config1[prop]);
     }
   });
-  var axiosKeys = valueFromConfig2Keys.concat(mergeDeepPropertiesKeys).concat(defaultToConfig2Keys);
-  var otherKeys = Object.keys(config2).filter(function filterAxiosKeys(key) {
+  utils.forEach(directMergeKeys, function merge(prop) {
+    if (prop in config2) {
+      config[prop] = getMergedValue(config1[prop], config2[prop]);
+    } else if (prop in config1) {
+      config[prop] = getMergedValue(undefined, config1[prop]);
+    }
+  });
+  var axiosKeys = valueFromConfig2Keys.concat(mergeDeepPropertiesKeys).concat(defaultToConfig2Keys).concat(directMergeKeys);
+  var otherKeys = Object.keys(config1).concat(Object.keys(config2)).filter(function filterAxiosKeys(key) {
     return axiosKeys.indexOf(key) === -1;
   });
-  utils.forEach(otherKeys, function otherKeysDefaultToConfig2(prop) {
-    if (typeof config2[prop] !== 'undefined') {
-      config[prop] = config2[prop];
-    } else if (typeof config1[prop] !== 'undefined') {
-      config[prop] = config1[prop];
-    }
-  });
+  utils.forEach(otherKeys, mergeDeepProperties);
   return config;
 };
+
+var name = "axios";
+var version$1 = "0.21.4";
+var description = "Promise based HTTP client for the browser and node.js";
+var main = "index.js";
+var scripts = {
+	test: "grunt test",
+	start: "node ./sandbox/server.js",
+	build: "NODE_ENV=production grunt build",
+	preversion: "npm test",
+	version: "npm run build && grunt version && git add -A dist && git add CHANGELOG.md bower.json package.json",
+	postversion: "git push && git push --tags",
+	examples: "node ./examples/server.js",
+	coveralls: "cat coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js",
+	fix: "eslint --fix lib/**/*.js"
+};
+var repository = {
+	type: "git",
+	url: "https://github.com/axios/axios.git"
+};
+var keywords = [
+	"xhr",
+	"http",
+	"ajax",
+	"promise",
+	"node"
+];
+var author = "Matt Zabriskie";
+var license = "MIT";
+var bugs = {
+	url: "https://github.com/axios/axios/issues"
+};
+var homepage = "https://axios-http.com";
+var devDependencies = {
+	coveralls: "^3.0.0",
+	"es6-promise": "^4.2.4",
+	grunt: "^1.3.0",
+	"grunt-banner": "^0.6.0",
+	"grunt-cli": "^1.2.0",
+	"grunt-contrib-clean": "^1.1.0",
+	"grunt-contrib-watch": "^1.0.0",
+	"grunt-eslint": "^23.0.0",
+	"grunt-karma": "^4.0.0",
+	"grunt-mocha-test": "^0.13.3",
+	"grunt-ts": "^6.0.0-beta.19",
+	"grunt-webpack": "^4.0.2",
+	"istanbul-instrumenter-loader": "^1.0.0",
+	"jasmine-core": "^2.4.1",
+	karma: "^6.3.2",
+	"karma-chrome-launcher": "^3.1.0",
+	"karma-firefox-launcher": "^2.1.0",
+	"karma-jasmine": "^1.1.1",
+	"karma-jasmine-ajax": "^0.1.13",
+	"karma-safari-launcher": "^1.0.0",
+	"karma-sauce-launcher": "^4.3.6",
+	"karma-sinon": "^1.0.5",
+	"karma-sourcemap-loader": "^0.3.8",
+	"karma-webpack": "^4.0.2",
+	"load-grunt-tasks": "^3.5.2",
+	minimist: "^1.2.0",
+	mocha: "^8.2.1",
+	sinon: "^4.5.0",
+	"terser-webpack-plugin": "^4.2.3",
+	typescript: "^4.0.5",
+	"url-search-params": "^0.10.0",
+	webpack: "^4.44.2",
+	"webpack-dev-server": "^3.11.0"
+};
+var browser$2 = {
+	"./lib/adapters/http.js": "./lib/adapters/xhr.js"
+};
+var jsdelivr = "dist/axios.min.js";
+var unpkg = "dist/axios.min.js";
+var typings = "./index.d.ts";
+var dependencies = {
+	"follow-redirects": "^1.14.0"
+};
+var bundlesize = [
+	{
+		path: "./dist/axios.min.js",
+		threshold: "5kB"
+	}
+];
+var _package = {
+	name: name,
+	version: version$1,
+	description: description,
+	main: main,
+	scripts: scripts,
+	repository: repository,
+	keywords: keywords,
+	author: author,
+	license: license,
+	bugs: bugs,
+	homepage: homepage,
+	devDependencies: devDependencies,
+	browser: browser$2,
+	jsdelivr: jsdelivr,
+	unpkg: unpkg,
+	typings: typings,
+	dependencies: dependencies,
+	bundlesize: bundlesize
+};
+
+var _package$1 = /*#__PURE__*/Object.freeze({
+  __proto__: null,
+  name: name,
+  version: version$1,
+  description: description,
+  main: main,
+  scripts: scripts,
+  repository: repository,
+  keywords: keywords,
+  author: author,
+  license: license,
+  bugs: bugs,
+  homepage: homepage,
+  devDependencies: devDependencies,
+  browser: browser$2,
+  jsdelivr: jsdelivr,
+  unpkg: unpkg,
+  typings: typings,
+  dependencies: dependencies,
+  bundlesize: bundlesize,
+  'default': _package
+});
+
+function createCommonjsModule(fn, basedir, module) {
+	return module = {
+	  path: basedir,
+	  exports: {},
+	  require: function (path, base) {
+      return commonjsRequire(path, (base === undefined || base === null) ? module.path : base);
+    }
+	}, fn(module, module.exports), module.exports;
+}
+
+function getCjsExportFromNamespace (n) {
+	return n && n['default'] || n;
+}
+
+function commonjsRequire () {
+	throw new Error('Dynamic requires are not currently supported by @rollup/plugin-commonjs');
+}
+
+var pkg = getCjsExportFromNamespace(_package$1);
+
+var validators = {};
+['object', 'boolean', 'number', 'function', 'string', 'symbol'].forEach(function (type, i) {
+  validators[type] = function validator(thing) {
+    return typeof thing === type || 'a' + (i < 1 ? 'n ' : ' ') + type;
+  };
+});
+var deprecatedWarnings = {};
+var currentVerArr = pkg.version.split('.');
+
+function isOlderVersion(version, thanVersion) {
+  var pkgVersionArr = thanVersion ? thanVersion.split('.') : currentVerArr;
+  var destVer = version.split('.');
+
+  for (var i = 0; i < 3; i++) {
+    if (pkgVersionArr[i] > destVer[i]) {
+      return true;
+    } else if (pkgVersionArr[i] < destVer[i]) {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+validators.transitional = function transitional(validator, version, message) {
+  var isDeprecated = version && isOlderVersion(version);
+
+  function formatMessage(opt, desc) {
+    return '[Axios v' + pkg.version + '] Transitional option \'' + opt + '\'' + desc + (message ? '. ' + message : '');
+  }
+
+  return function (value, opt, opts) {
+    if (validator === false) {
+      throw new Error(formatMessage(opt, ' has been removed in ' + version));
+    }
+
+    if (isDeprecated && !deprecatedWarnings[opt]) {
+      deprecatedWarnings[opt] = true;
+      console.warn(formatMessage(opt, ' has been deprecated since v' + version + ' and will be removed in the near future'));
+    }
+
+    return validator ? validator(value, opt, opts) : true;
+  };
+};
+
+function assertOptions(options, schema, allowUnknown) {
+  if (typeof options !== 'object') {
+    throw new TypeError('options must be an object');
+  }
+
+  var keys = Object.keys(options);
+  var i = keys.length;
+
+  while (i-- > 0) {
+    var opt = keys[i];
+    var validator = schema[opt];
+
+    if (validator) {
+      var value = options[opt];
+      var result = value === undefined || validator(value, opt, options);
+
+      if (result !== true) {
+        throw new TypeError('option ' + opt + ' must be ' + result);
+      }
+
+      continue;
+    }
+
+    if (allowUnknown !== true) {
+      throw Error('Unknown option ' + opt);
+    }
+  }
+}
+
+var validator = {
+  isOlderVersion: isOlderVersion,
+  assertOptions: assertOptions,
+  validators: validators
+};
+
+var validators$1 = validator.validators;
 
 function Axios(instanceConfig) {
   this.defaults = instanceConfig;
@@ -1170,17 +1514,67 @@ Axios.prototype.request = function request(config) {
     config.method = 'get';
   }
 
-  var chain = [dispatchRequest, undefined];
-  var promise = Promise.resolve(config);
-  this.interceptors.request.forEach(function unshiftRequestInterceptors(interceptor) {
-    chain.unshift(interceptor.fulfilled, interceptor.rejected);
-  });
-  this.interceptors.response.forEach(function pushResponseInterceptors(interceptor) {
-    chain.push(interceptor.fulfilled, interceptor.rejected);
-  });
+  var transitional = config.transitional;
 
-  while (chain.length) {
-    promise = promise.then(chain.shift(), chain.shift());
+  if (transitional !== undefined) {
+    validator.assertOptions(transitional, {
+      silentJSONParsing: validators$1.transitional(validators$1.boolean, '1.0.0'),
+      forcedJSONParsing: validators$1.transitional(validators$1.boolean, '1.0.0'),
+      clarifyTimeoutError: validators$1.transitional(validators$1.boolean, '1.0.0')
+    }, false);
+  }
+
+  var requestInterceptorChain = [];
+  var synchronousRequestInterceptors = true;
+  this.interceptors.request.forEach(function unshiftRequestInterceptors(interceptor) {
+    if (typeof interceptor.runWhen === 'function' && interceptor.runWhen(config) === false) {
+      return;
+    }
+
+    synchronousRequestInterceptors = synchronousRequestInterceptors && interceptor.synchronous;
+    requestInterceptorChain.unshift(interceptor.fulfilled, interceptor.rejected);
+  });
+  var responseInterceptorChain = [];
+  this.interceptors.response.forEach(function pushResponseInterceptors(interceptor) {
+    responseInterceptorChain.push(interceptor.fulfilled, interceptor.rejected);
+  });
+  var promise;
+
+  if (!synchronousRequestInterceptors) {
+    var chain = [dispatchRequest, undefined];
+    Array.prototype.unshift.apply(chain, requestInterceptorChain);
+    chain = chain.concat(responseInterceptorChain);
+    promise = Promise.resolve(config);
+
+    while (chain.length) {
+      promise = promise.then(chain.shift(), chain.shift());
+    }
+
+    return promise;
+  }
+
+  var newConfig = config;
+
+  while (requestInterceptorChain.length) {
+    var onFulfilled = requestInterceptorChain.shift();
+    var onRejected = requestInterceptorChain.shift();
+
+    try {
+      newConfig = onFulfilled(newConfig);
+    } catch (error) {
+      onRejected(error);
+      break;
+    }
+  }
+
+  try {
+    promise = dispatchRequest(newConfig);
+  } catch (error) {
+    return Promise.reject(error);
+  }
+
+  while (responseInterceptorChain.length) {
+    promise = promise.then(responseInterceptorChain.shift(), responseInterceptorChain.shift());
   }
 
   return promise;
@@ -1193,15 +1587,16 @@ Axios.prototype.getUri = function getUri(config) {
 
 utils.forEach(['delete', 'get', 'head', 'options'], function forEachMethodNoData(method) {
   Axios.prototype[method] = function (url, config) {
-    return this.request(utils.merge(config || {}, {
+    return this.request(mergeConfig(config || {}, {
       method: method,
-      url: url
+      url: url,
+      data: (config || {}).data
     }));
   };
 });
 utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
   Axios.prototype[method] = function (url, data, config) {
-    return this.request(utils.merge(config || {}, {
+    return this.request(mergeConfig(config || {}, {
       method: method,
       url: url,
       data: data
@@ -1266,6 +1661,10 @@ var spread = function spread(callback) {
   };
 };
 
+var isAxiosError = function isAxiosError(payload) {
+  return typeof payload === 'object' && payload.isAxiosError === true;
+};
+
 function createInstance(defaultConfig) {
   var context = new Axios_1(defaultConfig);
   var instance = bind(Axios_1.prototype.request, context);
@@ -1290,76 +1689,12 @@ axios.all = function all(promises) {
 };
 
 axios.spread = spread;
+axios.isAxiosError = isAxiosError;
 var axios_1 = axios;
 var _default = axios;
 axios_1.default = _default;
 
 var axios$1 = axios_1;
-
-const fakeLocalStorageMap = {};
-const fakeSessionStorageMap = {};
-const fakeWindow = {
-  btoa(a) {
-    return a;
-  },
-
-  atob(a) {
-    return a;
-  },
-
-  setInterval() {},
-
-  open() {},
-
-  location: {
-    origin: ''
-  },
-  localStorage: {
-    setItem(key, value) {
-      fakeLocalStorageMap[key] = value;
-    },
-
-    getItem(key) {
-      return fakeLocalStorageMap[key];
-    },
-
-    removeItem(key) {
-      delete fakeLocalStorageMap[key];
-    }
-
-  },
-  sessionStorage: {
-    setItem(key, value) {
-      fakeSessionStorageMap[key] = value;
-    },
-
-    getItem(key) {
-      return fakeSessionStorageMap[key];
-    },
-
-    removeItem(key) {
-      delete fakeSessionStorageMap[key];
-    }
-
-  }
-};
-const fakeNavigator = {
-  userAgent: null,
-  userLanguage: null,
-  language: null,
-  platform: typeof __previoletNamespace !== 'undefined' ? 'psdk:' + __previoletNamespace : null
-};
-const $window = typeof window !== 'undefined' ? window : fakeWindow;
-const $navigator = typeof navigator !== 'undefined' ? navigator : fakeNavigator;
-const $axios = axios$1;
-
-function setAxiosDefaultAdapter(newAdapter) {
-  $axios.defaults.adapter = newAdapter;
-}
-
-if (typeof overrideAxiosDefaultAdapter !== 'undefined') {
-  setAxiosDefaultAdapter(overrideAxiosDefaultAdapter);
-}
 
 function getBaseUrl(options, instance) {
   instance = instance || options.instance;
@@ -1394,11 +1729,154 @@ function urlSerializeObject(obj, prefix) {
 
   return str.join("&");
 }
-function storageEncode(value) {
-  return $window.btoa(unescape(encodeURIComponent(JSON.stringify(value))));
+function storageEncode(value, encodingType) {
+  if (encodingType == 'json') {
+    return JSON.stringify(value);
+  } else {
+    return $window.btoa(unescape(encodeURIComponent(JSON.stringify(value))));
+  }
 }
-function storageDecode(value) {
-  return JSON.parse($window.atob(decodeURIComponent(escape(value))));
+function storageDecode(value, encodingType) {
+  if (encodingType == 'json') {
+    return JSON.parse(value);
+  } else {
+    return JSON.parse($window.atob(decodeURIComponent(escape(value))));
+  }
+}
+
+function performRequest(endpoint, options) {
+  options.responseType = 'json';
+  let req = axios$1(endpoint, options).then(ret => {
+    return ret.data;
+  }).catch(err => {
+    console.log(err);
+    throw err;
+  });
+  return req;
+}
+
+function setAxiosDefaultAdapter(newAdapter) {
+  axios$1.defaults.adapter = newAdapter;
+}
+
+if (typeof overrideAxiosDefaultAdapter !== 'undefined') {
+  setAxiosDefaultAdapter(overrideAxiosDefaultAdapter);
+}
+
+function createRequest(config) {
+  const headers = new Headers(config.headers);
+
+  if (config.auth) {
+    const username = config.auth.username || '';
+    const password = config.auth.password ? unescape(encodeURIComponent(config.auth.password)) : '';
+    headers.set('Authorization', `Basic ${btoa(username + ':' + password)}`);
+  }
+
+  const method = config.method.toUpperCase();
+  const options = {
+    headers: headers,
+    method
+  };
+
+  if (method !== 'GET' && method !== 'HEAD') {
+    options.body = config.data;
+  }
+
+  if (config.mode) {
+    options.mode = config.mode;
+  }
+
+  if (config.cache) {
+    options.cache = config.cache;
+  }
+
+  if (config.integrity) {
+    options.integrity = config.integrity;
+  }
+
+  if (config.redirect) {
+    options.integrity = config.redirect;
+  }
+
+  if (config.referrer) {
+    options.integrity = config.referrer;
+  }
+
+  if (!utils.isUndefined(config.withCredentials)) {
+    options.credentials = config.withCredentials ? 'include' : 'omit';
+  }
+
+  const fullPath = buildFullPath(config.baseURL, config.url);
+  const url = buildURL(fullPath, config.params, config.paramsSerializer);
+  return new Request(url, options);
+}
+
+async function getResponse(request, config) {
+  let stageOne;
+
+  try {
+    stageOne = await fetch(request);
+  } catch (e) {
+    return Promise.reject(createError('Network Error', config, null, request));
+  }
+
+  const response = {
+    ok: stageOne.ok,
+    status: stageOne.status,
+    statusText: stageOne.statusText,
+    headers: new Headers(stageOne.headers),
+    config: config,
+    request
+  };
+
+  if (stageOne.status >= 200 && stageOne.status !== 204) {
+    switch (config.responseType) {
+      case 'arraybuffer':
+        response.data = await stageOne.arrayBuffer();
+        break;
+
+      case 'blob':
+        response.data = await stageOne.blob();
+        break;
+
+      case 'json':
+        response.data = await stageOne.json();
+        break;
+
+      case 'formData':
+        response.data = await stageOne.formData();
+        break;
+
+      default:
+        response.data = await stageOne.text();
+        break;
+    }
+  }
+
+  return Promise.resolve(response);
+}
+
+async function fetchAdapter(config) {
+  const request = createRequest(config);
+  const promiseChain = [getResponse(request, config)];
+
+  if (config.timeout && config.timeout > 0) {
+    promiseChain.push(new Promise(res => {
+      setTimeout(() => {
+        const message = config.timeoutErrorMessage ? config.timeoutErrorMessage : 'timeout of ' + config.timeout + 'ms exceeded';
+        res(createError(message, config, 'ECONNABORTED', request));
+      }, config.timeout);
+    }));
+  }
+
+  const data = await Promise.race(promiseChain);
+  return new Promise((resolve, reject) => {
+    if (data instanceof Error) {
+      reject(data);
+    } else {
+      Object.prototype.toString.call(config.settle) === '[object Function]' ? config.settle(resolve, reject, data) : settle(resolve, reject, data);
+    }
+  });
 }
 
 var defaultOptions = {
@@ -1415,12 +1893,15 @@ var defaultOptions = {
   userStorage: 'user',
   debug: false,
   reqIndex: 1,
-  sdkVersion: '1.0.33',
+  sdkVersion: '1.0.43',
   appVersion: '-',
   defaultConfig: {},
   tokenOverride: false,
   xhrAdapter: null,
-  tokenFallback: false
+  requestAdapterName: null,
+  tokenFallback: false,
+  localStorageObject: null,
+  localStorageEncode: 'complex'
 };
 
 var apiErrors = {
@@ -1443,20 +1924,6 @@ var apiErrors = {
   IDENTITY_EMAIL_CONFLICT: 905,
   IDENTITY_MISSING_GROUP: 906
 };
-
-function createCommonjsModule(fn, basedir, module) {
-	return module = {
-	  path: basedir,
-	  exports: {},
-	  require: function (path, base) {
-      return commonjsRequire(path, (base === undefined || base === null) ? module.path : base);
-    }
-	}, fn(module, module.exports), module.exports;
-}
-
-function commonjsRequire () {
-	throw new Error('Dynamic requires are not currently supported by @rollup/plugin-commonjs');
-}
 
 var crypt = createCommonjsModule(function (module) {
   (function () {
@@ -1731,6 +2198,10 @@ class LocalStorage {
 }
 
 function StorageFactory(options) {
+  if (null !== options.localStorageObject) {
+    return options.localStorageObject;
+  }
+
   switch (options.storageType) {
     case 'localStorage':
       try {
@@ -1814,24 +2285,10 @@ class Base {
     let req_id = this.sdk.options.reqIndex++;
 
     if (this.sdk.options.debug) {
-      console.log('> XHR Request (' + req_id + ', ' + __token + '): ', endpoint, options);
+      console.log(`> Request (${req_id}, ${__token}):`, endpoint, options);
     }
 
-    return $axios(endpoint, options).then(ret => {
-      if (this.sdk.options.debug) {
-        console.log('< XHR Response (' + req_id + ')', ret);
-      }
-
-      return ret.data;
-    }).catch(err => {
-      if (err.message) {
-        console.log('Error', err.message);
-      } else {
-        console.log('Error', err);
-      }
-
-      throw err;
-    });
+    return performRequest(endpoint, options);
   }
 
   __call_log(bucket, options) {
@@ -1977,6 +2434,10 @@ class Database extends Base {
     };
     return this.__callDatabase(options, '/' + id).then(ret => {
       this.__checkError(this, ret);
+
+      if (this.currentDatabase == 'user' && id == this.sdk.currentUser._id && ret.result && ret.result.update && ret.result.data && ret.result.data._id == id) {
+        this.sdk.currentUser = ret.result.data;
+      }
 
       return ret.result ? ret.result : ret;
     });
@@ -2279,33 +2740,33 @@ class Trace extends Base {
 
 }
 
-var name = "previolet";
-var version$1 = "1.0.33";
-var description = "Previolet Javascript SDK";
-var main = "dist/previolet-sdk.js";
+var name$1 = "previolet";
+var version$2 = "1.0.43";
+var description$1 = "Previolet Javascript SDK";
+var main$1 = "dist/previolet-sdk.js";
 var module$1 = "dist/previolet-sdk.common.js";
-var unpkg = "dist/previolet-sdk.min.js";
-var scripts = {
+var unpkg$1 = "dist/previolet-sdk.min.js";
+var scripts$1 = {
 	dev: "cross-env NODE_ENV=development webpack-dev-server --open --host 0.0.0.0 --config ./webpack.config.js",
 	build: "rollup --config"
 };
-var keywords = [
+var keywords$1 = [
 	"previolet",
 	"authentication",
 	"database",
 	"storage",
 	"remote-config"
 ];
-var author = "Mark Simons <msimons9740@gmail.com> (https://previolet.com)";
-var repository = {
+var author$1 = "Mark Simons <msimons9740@gmail.com> (https://previolet.com)";
+var repository$1 = {
 	type: "git",
 	url: "git+https://github.com/previolet/previolet-js-sdk.git"
 };
 var files = [
 	"dist"
 ];
-var license = "MIT";
-var devDependencies = {
+var license$1 = "MIT";
+var devDependencies$1 = {
 	"@babel/plugin-proposal-async-generator-functions": "^7.13.15",
 	"@rollup/plugin-commonjs": "^14.0.0",
 	"@rollup/plugin-json": "^4.1.0",
@@ -2330,34 +2791,34 @@ var tags = [
 	"storage",
 	"remote-config"
 ];
-var dependencies = {
+var dependencies$1 = {
 	"@babel/plugin-proposal-object-rest-spread": "^7.13.8",
 	"@rollup/plugin-babel": "^5.3.0",
-	axios: "^0.19.1",
+	axios: "^0.21.4",
 	md5: "^2.3.0"
 };
-var bugs = {
+var bugs$1 = {
 	url: "https://github.com/previolet/previolet-js-sdk/issues"
 };
-var homepage = "https://github.com/previolet/previolet-js-sdk#readme";
+var homepage$1 = "https://github.com/previolet/previolet-js-sdk#readme";
 var packageData = {
-	name: name,
-	version: version$1,
-	description: description,
-	main: main,
+	name: name$1,
+	version: version$2,
+	description: description$1,
+	main: main$1,
 	module: module$1,
-	unpkg: unpkg,
-	scripts: scripts,
-	keywords: keywords,
-	author: author,
-	repository: repository,
+	unpkg: unpkg$1,
+	scripts: scripts$1,
+	keywords: keywords$1,
+	author: author$1,
+	repository: repository$1,
 	files: files,
-	license: license,
-	devDependencies: devDependencies,
+	license: license$1,
+	devDependencies: devDependencies$1,
 	tags: tags,
-	dependencies: dependencies,
-	bugs: bugs,
-	homepage: homepage
+	dependencies: dependencies$1,
+	bugs: bugs$1,
+	homepage: homepage$1
 };
 
 class PrevioletSDK {
@@ -2413,7 +2874,19 @@ class PrevioletSDK {
       }
     }
 
+    if (options.requestAdapterName == 'fetch') {
+      if (options.debug) {
+        console.log('Switching to fetch axios adapter');
+      }
+
+      setAxiosDefaultAdapter(fetchAdapter);
+    }
+
     if (null !== options.xhrAdapter) {
+      if (options.debug) {
+        console.log('Switching to custom axios adapter');
+      }
+
       setAxiosDefaultAdapter(options.xhrAdapter);
     }
 
@@ -2548,25 +3021,6 @@ class PrevioletSDK {
         loginWithUsernameAndPin: (name, challenge) => {
           return vm.auth().loginWithUsernameAndPassword(name, '_pin:' + challenge);
         },
-        refreshUserInformation: () => {
-          if (!vm.auth().isAuthenticated()) {
-            if (this.options.debug) console.log('There is no authenticated user');
-            return false;
-          }
-
-          const data = JSON.stringify({
-            token: vm.token
-          });
-          return vm.__call(`/__/token?token=${vm.token}`).then(ret => {
-            if (ret && ret.result && ret.result.auth) {
-              vm.currentUser = ret.result.auth;
-              if (vm.options.debug) console.log('Updating user data with', vm.currentUser);
-              return vm.currentUser;
-            } else {
-              return false;
-            }
-          });
-        },
         sendLoginPin: name => {
           return vm.auth().loginWithUsernameAndPassword(name, '_sendEmailPin');
         },
@@ -2575,7 +3029,7 @@ class PrevioletSDK {
             return Promise.reject(new Error('username required'));
           }
 
-          let origin = params && params.origin ? params.origin : window.location.origin;
+          let origin = params && params.origin ? params.origin : $window.location.origin;
           let skip_email = params && params.skip_email ? params.skip_email : false;
           const data = JSON.stringify({
             name,
@@ -2768,7 +3222,7 @@ class PrevioletSDK {
 
         set(value) {
           currentApp = value;
-          vm.storageApi.setItem(options.applicationStorage, storageEncode(value));
+          vm.storageApi.setItem(options.applicationStorage, storageEncode(value, options.localStorageEncode));
         }
 
       },
@@ -2779,7 +3233,12 @@ class PrevioletSDK {
 
         set(value) {
           currentUser = value;
-          vm.storageApi.setItem(options.userStorage, storageEncode(value));
+
+          if (this.options.debug) {
+            console.log('Setting current user information:', value);
+          }
+
+          vm.storageApi.setItem(options.userStorage, storageEncode(value, options.localStorageEncode));
         }
 
       },
@@ -2791,7 +3250,7 @@ class PrevioletSDK {
         set(value) {
           value.ts = value.ts || Date.now();
           value.rnd = value.rnd || generateRandomNumber(100000, 999999);
-          vm.storageApi.setItem(options.browserIdentification, storageEncode(value));
+          vm.storageApi.setItem(options.browserIdentification, storageEncode(value, options.localStorageEncode));
         }
 
       },
@@ -2800,7 +3259,7 @@ class PrevioletSDK {
           let display = 'browser';
           const mqStandAlone = '(display-mode: standalone)';
 
-          if (navigator.standalone || window.matchMedia(mqStandAlone).matches) {
+          if ($navigator.standalone || typeof $window.matchMedia == 'function' && $window.matchMedia(mqStandAlone).matches) {
             display = 'standalone';
           }
 
@@ -2901,6 +3360,10 @@ class PrevioletSDK {
       };
     };
 
+    vm.version = () => {
+      return vm.options.sdkVersion;
+    };
+
     vm.currentUser = vm.user().data;
   }
 
@@ -2985,28 +3448,6 @@ class PrevioletSDK {
     }
   }
 
-  __call(url, options, instance) {
-    instance = instance || this.options.instance;
-    options = options || {};
-    options.headers = this.getDefaultHeaders();
-    let req_id = this.options.reqIndex++;
-    let endpoint = getBaseUrl(this.options, instance) + url;
-
-    if (this.options.debug) {
-      console.log('> XHR Request (' + req_id + ')', endpoint, options);
-    }
-
-    return $axios(endpoint, options).then(ret => {
-      if (this.options.debug) {
-        console.log('< XHR Response (' + req_id + ')', ret);
-      }
-
-      return ret.data;
-    }).catch(err => {
-      throw err;
-    });
-  }
-
   __storageGet(key) {
     const vm = this;
 
@@ -3016,7 +3457,7 @@ class PrevioletSDK {
 
     if (_storage) {
       try {
-        _storage_data = storageDecode(_storage);
+        _storage_data = storageDecode(_storage, vm.options.localStorageEncode);
       } catch (e) {}
     }
 
@@ -3041,6 +3482,20 @@ class PrevioletSDK {
 
       throw response;
     }
+  }
+
+  __call(url, options, instance) {
+    instance = instance || this.options.instance;
+    options = options || {};
+    options.headers = this.getDefaultHeaders();
+    let req_id = this.options.reqIndex++;
+    let endpoint = getBaseUrl(this.options, instance) + url;
+
+    if (this.options.debug) {
+      console.log(`> Request (${req_id})`, endpoint, options);
+    }
+
+    return performRequest(endpoint, options);
   }
 
 }
