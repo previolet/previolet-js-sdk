@@ -225,7 +225,14 @@ export default class Database extends Base {
   }
 
   getDistinct(field, params) {
-    // Implementation to follow
+    const options = {
+      method: 'GET',
+    }
+
+    return this.__callDatabase(options, '/' + encodeURIComponent(field) + '/distinct').then(ret => {
+      this.__checkError(this, ret)
+      return ret.result ? ret.result : ret
+    })
   }
 
   getDistinctCount(field, params) {

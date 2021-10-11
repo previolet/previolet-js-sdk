@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.0.43
+ * Previolet Javascript SDK v1.0.49
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1892,7 +1892,7 @@ var PrevioletSDK = (function (exports) {
     userStorage: 'user',
     debug: false,
     reqIndex: 1,
-    sdkVersion: '1.0.43',
+    sdkVersion: '1.0.49',
     appVersion: '-',
     defaultConfig: {},
     tokenOverride: false,
@@ -2533,7 +2533,16 @@ var PrevioletSDK = (function (exports) {
       });
     }
 
-    getDistinct(field, params) {}
+    getDistinct(field, params) {
+      const options = {
+        method: 'GET'
+      };
+      return this.__callDatabase(options, '/' + encodeURIComponent(field) + '/distinct').then(ret => {
+        this.__checkError(this, ret);
+
+        return ret.result ? ret.result : ret;
+      });
+    }
 
     getDistinctCount(field, params) {}
 
@@ -2740,7 +2749,7 @@ var PrevioletSDK = (function (exports) {
   }
 
   var name$1 = "previolet";
-  var version$2 = "1.0.43";
+  var version$2 = "1.0.49";
   var description$1 = "Previolet Javascript SDK";
   var main$1 = "dist/previolet-sdk.js";
   var module = "dist/previolet-sdk.common.js";
