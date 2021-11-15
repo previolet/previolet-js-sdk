@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.0.49
+ * Previolet Javascript SDK v1.0.50
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1892,7 +1892,7 @@ var PrevioletSDK = (function (exports) {
     userStorage: 'user',
     debug: false,
     reqIndex: 1,
-    sdkVersion: '1.0.49',
+    sdkVersion: '1.0.50',
     appVersion: '-',
     defaultConfig: {},
     tokenOverride: false,
@@ -2616,6 +2616,26 @@ var PrevioletSDK = (function (exports) {
       super(sdk);
     }
 
+    upload(data) {
+      data = data || {};
+      const options = {
+        method: 'POST',
+        data
+      };
+      return this.__call('/__/storage', options).then(ret => {
+        this.__checkError(this, ret);
+
+        return ret.result ? ret.result : ret;
+      });
+    }
+
+    uploadBase64(file_name, file_base64) {
+      return this.upload({
+        file_name,
+        file_base64
+      });
+    }
+
     getAll() {
       const options = {
         method: 'GET'
@@ -2749,7 +2769,7 @@ var PrevioletSDK = (function (exports) {
   }
 
   var name$1 = "previolet";
-  var version$2 = "1.0.49";
+  var version$2 = "1.0.50";
   var description$1 = "Previolet Javascript SDK";
   var main$1 = "dist/previolet-sdk.js";
   var module = "dist/previolet-sdk.common.js";

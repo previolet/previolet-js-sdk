@@ -6,6 +6,27 @@ export default class Storage extends Base {
     super(sdk)
   }
 
+  upload(data) {
+    data = data || {}
+
+    const options = {
+      method: 'POST',
+      data,
+    }
+
+    return this.__call('/__/storage', options).then(ret => {
+      this.__checkError(this, ret)
+      return ret.result ? ret.result : ret;
+    })
+  }
+
+  uploadBase64(file_name, file_base64) {
+    return this.upload({
+      file_name,
+      file_base64,
+    })
+  }
+
   getAll() {
     const options = {
       method: 'GET',

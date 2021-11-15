@@ -133,16 +133,14 @@ var router = new VueRouter({
           login () {
             const vm = this
 
-            sdk.auth().sendLoginPin('john@obviouslyjoe.com')
+            // sdk.auth().sendLoginPin('john@obviouslyjoe.com')
 
-            /*
             sdk.auth().loginWithUsernameAndPassword(
               'john@obviouslyjoe.com', 
               'demoaccount').catch(err => {
               console.log(err)
               alert(err)
             })
-            */
           },
 
           logout() {
