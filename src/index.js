@@ -1,4 +1,4 @@
-import { getBaseUrl, generateRandomNumber, storageDecode, storageEncode, setAxiosDefaultAdapter, performRequest } from './utils'
+import { getBaseUrl, generateRandomNumber, storageDecode, storageEncode, setAxiosDefaultAdapter, performRequest, getDisplayMode } from './utils'
 import fetchAdapter from './fetchAdapter'
 import { $window, $navigator } from './globals'
 import defaultOptions from './options'
@@ -17,6 +17,8 @@ export default class PrevioletSDK {
     const vm = this
 
     let options = Object.assign({}, defaultOptions, overrideOptions)
+    vm.options = options
+
     if (options.debug) {
       console.log(`%cPreviolet Javascript SDK (v${packageData.version}) instantiated in debug mode`, 'color: #CC00FF')
     }
@@ -87,17 +89,35 @@ export default class PrevioletSDK {
     let token = false
     let currentApp = null
     let currentUser = null
-    let last_access_token = null
+    let browserIdentification = null
+    let lastAccessToken = null
     let headers = {}
-    this.changeHooks = []
+    let initialSetupCompleted = false
+    vm.changeHooks = []
 
-    this.onAuthDataCallback = (data) => {
+    // Include display mode in the identification
+
+    let baseline_identification = {
+        ua: $navigator.userAgent,
+      lang: $navigator.language || $navigator.userLanguage,
+      plat: $navigator.platform,
+      vsdk: vm.options.sdkVersion,
+      vapp: vm.options.appVersion,
+       ver: vm.options.version,
+      dspm: getDisplayMode(),
+    }
+
+    if (typeof __previoletRayId !== 'undefined') {
+      baseline_identification.ray = __previoletRayId
+    }
+
+    vm.onAuthDataCallback = (data) => {
       return data
     }
 
-    this.storageApi = StorageFactory(options)
+    vm.storageApi = StorageFactory(options)
 
-    this.auth = () => {
+    vm.auth = () => {
       return {
         GithubAuthProvider: {
           id: 'github',
@@ -194,8 +214,8 @@ export default class PrevioletSDK {
         },
 
         loginWithIdentityProvider: (provider, access_token) => {
-          access_token = access_token || this.last_access_token
-          this.last_access_token = access_token
+          access_token = access_token || this.lastAccessToken
+          this.lastAccessToken = access_token
 
           if (this.options.debug) {
             console.log('Logging In with identity provider:', provider, access_token)
@@ -293,9 +313,9 @@ export default class PrevioletSDK {
         },
 
         registerWithIdentityProvider: (provider, email, access_token, trigger_login) => {
-          access_token = access_token || this.last_access_token
+          access_token = access_token || this.lastAccessToken
           trigger_login = trigger_login || true
-          this.last_access_token = access_token
+          this.lastAccessToken = access_token
 
           const data = {
             access_token,
@@ -356,7 +376,9 @@ export default class PrevioletSDK {
           })
         },
 
-        onAuthStateChanged: (callback) => {
+        onAuthStateChanged: async callback => {
+          await vm.resourcesToLoad
+
           if (typeof callback == 'function') {
 
             if (vm.changeHooks.indexOf(callback) == -1) {
@@ -412,16 +434,7 @@ export default class PrevioletSDK {
       }
     }
 
-    Object.defineProperties(this, {
-      options: {
-        get() {
-          return options
-        },
-        set(value) {
-          options = value
-        }
-      },
-
+    Object.defineProperties(vm, {
       token: {
         get() {
           return token
@@ -448,7 +461,10 @@ export default class PrevioletSDK {
         },
         set(value) {
           currentApp = value
-          vm.storageApi.setItem(options.applicationStorage, storageEncode(value, options.localStorageEncode))
+
+          if (vm.initialSetupCompleted) {
+            vm.storageApi.setItem(options.applicationStorage, storageEncode(value, options.localStorageEncode))
+          }
         }
       },
 
@@ -459,91 +475,27 @@ export default class PrevioletSDK {
         set(value) {
           currentUser = value
 
-          if (this.options.debug) {
-            console.log('Setting current user information:', value)
+          if (vm.initialSetupCompleted) {
+            vm.storageApi.setItem(options.userStorage, storageEncode(value, options.localStorageEncode))
           }
-
-          vm.storageApi.setItem(options.userStorage, storageEncode(value, options.localStorageEncode))
         }
       },
 
       browserIdentification: {
         get() {
-          return vm.__storageGet(vm.options.browserIdentification)
+          return browserIdentification
         },
         set(value) {
-          value.ts = value.ts || Date.now()
-          value.rnd = value.rnd || generateRandomNumber(100000, 999999)
-          vm.storageApi.setItem(options.browserIdentification, storageEncode(value, options.localStorageEncode))
+          browserIdentification = value
+
+          if (vm.initialSetupCompleted) {
+            value.ts = value.ts || Date.now()
+            value.rnd = value.rnd || generateRandomNumber(100000, 999999)
+            vm.storageApi.setItem(options.browserIdentification, storageEncode(value, options.localStorageEncode))
+          }
         }
       },
-
-      displayMode: {
-        get() {
-          let display = 'browser'
-          const mqStandAlone = '(display-mode: standalone)'
-          if ($navigator.standalone || (typeof $window.matchMedia == 'function' && $window.matchMedia(mqStandAlone).matches)) {
-            display = 'standalone'
-          }
-          return display
-        }
-      }
     })
-
-    vm.app = () => {
-      return {
-        region: vm.options.region,
-        token: vm.storageApi.getItem(vm.options.tokenName) || false,
-        data: vm.__storageGet(vm.options.applicationStorage),
-      }
-    }
-
-    let _stored_token = vm.app().token
-    vm.token = _stored_token
-
-    // Include display mode in the identification
-
-    let baseline_identification = {
-        ua: $navigator.userAgent,
-      lang: $navigator.language || $navigator.userLanguage,
-      plat: $navigator.platform,
-      vsdk: vm.options.sdkVersion,
-      vapp: vm.options.appVersion,
-       ver: vm.options.version,
-      dspm: vm.displayMode,
-    }
-
-    if (typeof __previoletRayId !== 'undefined') {
-      baseline_identification.ray = __previoletRayId
-    }
-
-    // Handle browser identification
-    if (! vm.browserIdentification) {
-      vm.browserIdentification = { ...baseline_identification }
-
-      if (vm.options.debug) {
-        console.log('Generating browser identification', vm.browserIdentification)
-      }
-    } else {
-      // Check if anything changed and if so, update the identification
-      if (vm.options.debug) {
-        console.log('Browser identification exists', vm.browserIdentification)
-      }
-
-      let match = {
-          ...baseline_identification,
-          ts: vm.browserIdentification.ts,
-         rnd: vm.browserIdentification.rnd,
-      }
-
-      if (JSON.stringify(match) != JSON.stringify(vm.browserIdentification)) {
-        if (vm.options.debug) {
-          console.log('Browser identification changed, renewing', match)
-        }
-
-        vm.browserIdentification = match
-      }
-    }
 
     let __db = new DatabaseApi(vm).addToErrorChain(vm, vm.__checkError)
     vm.db = () => {
@@ -575,17 +527,72 @@ export default class PrevioletSDK {
       return __trace
     }
 
-    vm.user = () => {
-      return {
-        data: vm.__storageGet(vm.options.userStorage),
-      }
-    }
-
     vm.version = () => {
       return vm.options.sdkVersion
     }
 
-    vm.currentUser = vm.user().data
+    vm.app = () => {
+      return {
+        region: vm.options.region,
+        token: vm.token,
+        data: vm.currentApp,
+      }
+    }
+
+    vm.user = () => {
+      return {
+        data: vm.currentUser,
+      }
+    }
+
+    const fetchStoredResources = async (vm) => {
+      let [ _token, _currentUser, _currentApp, _browserIdentification ] = await Promise.all(
+        [ 
+          vm.storageApi.getItem(vm.options.tokenName),
+          vm.__storageGet(vm.options.userStorage),
+          vm.__storageGet(vm.options.applicationStorage),
+          vm.__storageGet(vm.options.browserIdentification),
+        ]
+      )
+
+      vm.token                 = _token
+      vm.currentUser           = _currentUser
+      vm.currentApp            = _currentApp
+      vm.browserIdentification = _browserIdentification
+
+      // Handle browser identification
+      if (! vm.browserIdentification) {
+        vm.browserIdentification = { ...baseline_identification }
+
+        if (vm.options.debug) {
+          console.log('Generating browser identification', vm.browserIdentification)
+        }
+      } else {
+        // Check if anything changed and if so, update the identification
+        if (vm.options.debug) {
+          console.log('Browser identification exists: ', vm.browserIdentification)
+        }
+
+        let match = {
+            ...baseline_identification,
+            ts: vm.browserIdentification.ts,
+           rnd: vm.browserIdentification.rnd,
+        }
+
+        if (JSON.stringify(match) != JSON.stringify(vm.browserIdentification)) {
+          if (vm.options.debug) {
+            console.log('Browser identification changed, renewing', match)
+          }
+
+          vm.browserIdentification = match
+        }
+      }
+
+      vm.initialSetupCompleted = true
+      return Promise.resolve(true)
+    }
+
+    vm.resourcesToLoad = fetchStoredResources(vm)
   }
 
   getDefaultHeaders() {
@@ -672,20 +679,21 @@ export default class PrevioletSDK {
     }
   }
 
-  __storageGet(key) {
+  async __storageGet(key) {
     const vm = this
 
-    let _storage = vm.storageApi.getItem(key)
-    let _storage_data = false
+    let encodedData = await vm.storageApi.getItem(key)
+    let decodedData = false
 
-    if (_storage) {
+    if (encodedData) {
       try {
-        _storage_data = storageDecode(_storage, vm.options.localStorageEncode)
+        decodedData = storageDecode(encodedData, vm.options.localStorageEncode)
       } catch (e) {
+        console.log('Error decoding data', e)
       }
     }
 
-    return _storage_data
+    return Promise.resolve(decodedData)
   }
 
   __checkError (context, response) {

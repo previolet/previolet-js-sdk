@@ -21,4 +21,5 @@ export default {
   tokenFallback: false,
   localStorageObject: null,
   localStorageEncode: 'complex',
+  localStorageAsync: false,
 }

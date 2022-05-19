@@ -1,4 +1,4 @@
-import { $window } from './globals'
+import { $window, $navigator } from './globals'
 import axios from 'axios'
 
 export function camelCase(name) {
@@ -59,6 +59,15 @@ export function storageDecode(value, encodingType) {
   } else {
     return JSON.parse($window.atob(decodeURIComponent(escape(value))))
   }
+}
+
+export function getDisplayMode() {
+  let display = 'browser'
+  const mqStandAlone = '(display-mode: standalone)'
+  if ($navigator.standalone || (typeof $window.matchMedia == 'function' && $window.matchMedia(mqStandAlone).matches)) {
+    display = 'standalone'
+  }
+  return display
 }
 
 function performRequest(endpoint, options) {

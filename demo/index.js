@@ -6,6 +6,7 @@ const sdk = new PrevioletSDK({
   instance: DEMO_INSTANCE,
   appVersion: '1.0.0',
   debug: true,
+  localStorageAsync: true,
   // requestAdapterName: 'fetch',
   // localStorageEncode: 'json'
 })

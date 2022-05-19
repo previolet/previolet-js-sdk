@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.0.50
+ * Previolet Javascript SDK v1.1.0
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -278,15 +278,6 @@ function isObject(val) {
   return val !== null && typeof val === 'object';
 }
 
-function isPlainObject(val) {
-  if (toString.call(val) !== '[object Object]') {
-    return false;
-  }
-
-  var prototype = Object.getPrototypeOf(val);
-  return prototype === null || prototype === Object.prototype;
-}
-
 function isDate(val) {
   return toString.call(val) === '[object Date]';
 }
@@ -312,7 +303,7 @@ function isURLSearchParams(val) {
 }
 
 function trim(str) {
-  return str.trim ? str.trim() : str.replace(/^\s+|\s+$/g, '');
+  return str.replace(/^\s*/, '').replace(/\s*$/, '');
 }
 
 function isStandardBrowserEnv() {
@@ -349,12 +340,28 @@ function merge() {
   var result = {};
 
   function assignValue(val, key) {
-    if (isPlainObject(result[key]) && isPlainObject(val)) {
+    if (typeof result[key] === 'object' && typeof val === 'object') {
       result[key] = merge(result[key], val);
-    } else if (isPlainObject(val)) {
-      result[key] = merge({}, val);
-    } else if (isArray(val)) {
-      result[key] = val.slice();
+    } else {
+      result[key] = val;
+    }
+  }
+
+  for (var i = 0, l = arguments.length; i < l; i++) {
+    forEach(arguments[i], assignValue);
+  }
+
+  return result;
+}
+
+function deepMerge() {
+  var result = {};
+
+  function assignValue(val, key) {
+    if (typeof result[key] === 'object' && typeof val === 'object') {
+      result[key] = deepMerge(result[key], val);
+    } else if (typeof val === 'object') {
+      result[key] = deepMerge({}, val);
     } else {
       result[key] = val;
     }
@@ -378,14 +385,6 @@ function extend(a, b, thisArg) {
   return a;
 }
 
-function stripBOM(content) {
-  if (content.charCodeAt(0) === 0xFEFF) {
-    content = content.slice(1);
-  }
-
-  return content;
-}
-
 var utils = {
   isArray: isArray,
   isArrayBuffer: isArrayBuffer,
@@ -395,7 +394,6 @@ var utils = {
   isString: isString,
   isNumber: isNumber,
   isObject: isObject,
-  isPlainObject: isPlainObject,
   isUndefined: isUndefined,
   isDate: isDate,
   isFile: isFile,
@@ -406,13 +404,13 @@ var utils = {
   isStandardBrowserEnv: isStandardBrowserEnv,
   forEach: forEach,
   merge: merge,
+  deepMerge: deepMerge,
   extend: extend,
-  trim: trim,
-  stripBOM: stripBOM
+  trim: trim
 };
 
 function encode(val) {
-  return encodeURIComponent(val).replace(/%3A/gi, ':').replace(/%24/g, '$').replace(/%2C/gi, ',').replace(/%20/g, '+').replace(/%5B/gi, '[').replace(/%5D/gi, ']');
+  return encodeURIComponent(val).replace(/%40/gi, '@').replace(/%3A/gi, ':').replace(/%24/g, '$').replace(/%2C/gi, ',').replace(/%20/g, '+').replace(/%5B/gi, '[').replace(/%5D/gi, ']');
 }
 
 var buildURL = function buildURL(url, params, paramsSerializer) {
@@ -469,12 +467,10 @@ function InterceptorManager() {
   this.handlers = [];
 }
 
-InterceptorManager.prototype.use = function use(fulfilled, rejected, options) {
+InterceptorManager.prototype.use = function use(fulfilled, rejected) {
   this.handlers.push({
     fulfilled: fulfilled,
-    rejected: rejected,
-    synchronous: options ? options.synchronous : false,
-    runWhen: options ? options.runWhen : null
+    rejected: rejected
   });
   return this.handlers.length - 1;
 };
@@ -494,6 +490,17 @@ InterceptorManager.prototype.forEach = function forEach(fn) {
 };
 
 var InterceptorManager_1 = InterceptorManager;
+
+var transformData = function transformData(data, headers, fns) {
+  utils.forEach(fns, function transform(fn) {
+    data = fn(data, headers);
+  });
+  return data;
+};
+
+var isCancel = function isCancel(value) {
+  return !!(value && value.__CANCEL__);
+};
 
 var global$1 = typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {};
 
@@ -748,7 +755,7 @@ var enhanceError = function enhanceError(error, config, code, request, response)
   error.response = response;
   error.isAxiosError = true;
 
-  error.toJSON = function toJSON() {
+  error.toJSON = function () {
     return {
       message: this.message,
       name: this.name,
@@ -774,54 +781,12 @@ var createError = function createError(message, config, code, request, response)
 var settle = function settle(resolve, reject, response) {
   var validateStatus = response.config.validateStatus;
 
-  if (!response.status || !validateStatus || validateStatus(response.status)) {
+  if (!validateStatus || validateStatus(response.status)) {
     resolve(response);
   } else {
     reject(createError('Request failed with status code ' + response.status, response.config, null, response.request, response));
   }
 };
-
-var cookies = utils.isStandardBrowserEnv() ? function standardBrowserEnv() {
-  return {
-    write: function write(name, value, expires, path, domain, secure) {
-      var cookie = [];
-      cookie.push(name + '=' + encodeURIComponent(value));
-
-      if (utils.isNumber(expires)) {
-        cookie.push('expires=' + new Date(expires).toGMTString());
-      }
-
-      if (utils.isString(path)) {
-        cookie.push('path=' + path);
-      }
-
-      if (utils.isString(domain)) {
-        cookie.push('domain=' + domain);
-      }
-
-      if (secure === true) {
-        cookie.push('secure');
-      }
-
-      document.cookie = cookie.join('; ');
-    },
-    read: function read(name) {
-      var match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
-      return match ? decodeURIComponent(match[3]) : null;
-    },
-    remove: function remove(name) {
-      this.write(name, '', Date.now() - 86400000);
-    }
-  };
-}() : function nonStandardBrowserEnv() {
-  return {
-    write: function write() {},
-    read: function read() {
-      return null;
-    },
-    remove: function remove() {}
-  };
-}();
 
 var isAbsoluteURL = function isAbsoluteURL(url) {
   return /^([a-z][a-z\d\+\-\.]*:)?\/\//i.test(url);
@@ -908,11 +873,52 @@ var isURLSameOrigin = utils.isStandardBrowserEnv() ? function standardBrowserEnv
   };
 }();
 
+var cookies = utils.isStandardBrowserEnv() ? function standardBrowserEnv() {
+  return {
+    write: function write(name, value, expires, path, domain, secure) {
+      var cookie = [];
+      cookie.push(name + '=' + encodeURIComponent(value));
+
+      if (utils.isNumber(expires)) {
+        cookie.push('expires=' + new Date(expires).toGMTString());
+      }
+
+      if (utils.isString(path)) {
+        cookie.push('path=' + path);
+      }
+
+      if (utils.isString(domain)) {
+        cookie.push('domain=' + domain);
+      }
+
+      if (secure === true) {
+        cookie.push('secure');
+      }
+
+      document.cookie = cookie.join('; ');
+    },
+    read: function read(name) {
+      var match = document.cookie.match(new RegExp('(^|;\\s*)(' + name + ')=([^;]*)'));
+      return match ? decodeURIComponent(match[3]) : null;
+    },
+    remove: function remove(name) {
+      this.write(name, '', Date.now() - 86400000);
+    }
+  };
+}() : function nonStandardBrowserEnv() {
+  return {
+    write: function write() {},
+    read: function read() {
+      return null;
+    },
+    remove: function remove() {}
+  };
+}();
+
 var xhr = function xhrAdapter(config) {
   return new Promise(function dispatchXhrRequest(resolve, reject) {
     var requestData = config.data;
     var requestHeaders = config.headers;
-    var responseType = config.responseType;
 
     if (utils.isFormData(requestData)) {
       delete requestHeaders['Content-Type'];
@@ -922,7 +928,7 @@ var xhr = function xhrAdapter(config) {
 
     if (config.auth) {
       var username = config.auth.username || '';
-      var password = config.auth.password ? unescape(encodeURIComponent(config.auth.password)) : '';
+      var password = config.auth.password || '';
       requestHeaders.Authorization = 'Basic ' + btoa(username + ':' + password);
     }
 
@@ -930,13 +936,17 @@ var xhr = function xhrAdapter(config) {
     request.open(config.method.toUpperCase(), buildURL(fullPath, config.params, config.paramsSerializer), true);
     request.timeout = config.timeout;
 
-    function onloadend() {
-      if (!request) {
+    request.onreadystatechange = function handleLoad() {
+      if (!request || request.readyState !== 4) {
+        return;
+      }
+
+      if (request.status === 0 && !(request.responseURL && request.responseURL.indexOf('file:') === 0)) {
         return;
       }
 
       var responseHeaders = 'getAllResponseHeaders' in request ? parseHeaders(request.getAllResponseHeaders()) : null;
-      var responseData = !responseType || responseType === 'text' || responseType === 'json' ? request.responseText : request.response;
+      var responseData = !config.responseType || config.responseType === 'text' ? request.responseText : request.response;
       var response = {
         data: responseData,
         status: request.status,
@@ -947,23 +957,7 @@ var xhr = function xhrAdapter(config) {
       };
       settle(resolve, reject, response);
       request = null;
-    }
-
-    if ('onloadend' in request) {
-      request.onloadend = onloadend;
-    } else {
-      request.onreadystatechange = function handleLoad() {
-        if (!request || request.readyState !== 4) {
-          return;
-        }
-
-        if (request.status === 0 && !(request.responseURL && request.responseURL.indexOf('file:') === 0)) {
-          return;
-        }
-
-        setTimeout(onloadend);
-      };
-    }
+    };
 
     request.onabort = function handleAbort() {
       if (!request) {
@@ -986,12 +980,13 @@ var xhr = function xhrAdapter(config) {
         timeoutErrorMessage = config.timeoutErrorMessage;
       }
 
-      reject(createError(timeoutErrorMessage, config, config.transitional && config.transitional.clarifyTimeoutError ? 'ETIMEDOUT' : 'ECONNABORTED', request));
+      reject(createError(timeoutErrorMessage, config, 'ECONNABORTED', request));
       request = null;
     };
 
     if (utils.isStandardBrowserEnv()) {
-      var xsrfValue = (config.withCredentials || isURLSameOrigin(fullPath)) && config.xsrfCookieName ? cookies.read(config.xsrfCookieName) : undefined;
+      var cookies$1 = cookies;
+      var xsrfValue = (config.withCredentials || isURLSameOrigin(fullPath)) && config.xsrfCookieName ? cookies$1.read(config.xsrfCookieName) : undefined;
 
       if (xsrfValue) {
         requestHeaders[config.xsrfHeaderName] = xsrfValue;
@@ -1012,8 +1007,14 @@ var xhr = function xhrAdapter(config) {
       request.withCredentials = !!config.withCredentials;
     }
 
-    if (responseType && responseType !== 'json') {
-      request.responseType = config.responseType;
+    if (config.responseType) {
+      try {
+        request.responseType = config.responseType;
+      } catch (e) {
+        if (config.responseType !== 'json') {
+          throw e;
+        }
+      }
     }
 
     if (typeof config.onDownloadProgress === 'function') {
@@ -1036,7 +1037,7 @@ var xhr = function xhrAdapter(config) {
       });
     }
 
-    if (!requestData) {
+    if (requestData === undefined) {
       requestData = null;
     }
 
@@ -1066,27 +1067,7 @@ function getDefaultAdapter() {
   return adapter;
 }
 
-function stringifySafely(rawValue, parser, encoder) {
-  if (utils.isString(rawValue)) {
-    try {
-      (parser || JSON.parse)(rawValue);
-      return utils.trim(rawValue);
-    } catch (e) {
-      if (e.name !== 'SyntaxError') {
-        throw e;
-      }
-    }
-  }
-
-  return (encoder || JSON.stringify)(rawValue);
-}
-
 var defaults = {
-  transitional: {
-    silentJSONParsing: true,
-    forcedJSONParsing: true,
-    clarifyTimeoutError: false
-  },
   adapter: getDefaultAdapter(),
   transformRequest: [function transformRequest(data, headers) {
     normalizeHeaderName(headers, 'Accept');
@@ -1105,31 +1086,18 @@ var defaults = {
       return data.toString();
     }
 
-    if (utils.isObject(data) || headers && headers['Content-Type'] === 'application/json') {
-      setContentTypeIfUnset(headers, 'application/json');
-      return stringifySafely(data);
+    if (utils.isObject(data)) {
+      setContentTypeIfUnset(headers, 'application/json;charset=utf-8');
+      return JSON.stringify(data);
     }
 
     return data;
   }],
   transformResponse: [function transformResponse(data) {
-    var transitional = this.transitional;
-    var silentJSONParsing = transitional && transitional.silentJSONParsing;
-    var forcedJSONParsing = transitional && transitional.forcedJSONParsing;
-    var strictJSONParsing = !silentJSONParsing && this.responseType === 'json';
-
-    if (strictJSONParsing || forcedJSONParsing && utils.isString(data) && data.length) {
+    if (typeof data === 'string') {
       try {
-        return JSON.parse(data);
-      } catch (e) {
-        if (strictJSONParsing) {
-          if (e.name === 'SyntaxError') {
-            throw enhanceError(e, this, 'E_JSON_PARSE');
-          }
-
-          throw e;
-        }
-      }
+        data = JSON.parse(data);
+      } catch (e) {}
     }
 
     return data;
@@ -1138,7 +1106,6 @@ var defaults = {
   xsrfCookieName: 'XSRF-TOKEN',
   xsrfHeaderName: 'X-XSRF-TOKEN',
   maxContentLength: -1,
-  maxBodyLength: -1,
   validateStatus: function validateStatus(status) {
     return status >= 200 && status < 300;
   }
@@ -1156,18 +1123,6 @@ utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
 });
 var defaults_1 = defaults;
 
-var transformData = function transformData(data, headers, fns) {
-  var context = this || defaults_1;
-  utils.forEach(fns, function transform(fn) {
-    data = fn.call(context, data, headers);
-  });
-  return data;
-};
-
-var isCancel = function isCancel(value) {
-  return !!(value && value.__CANCEL__);
-};
-
 function throwIfCancellationRequested(config) {
   if (config.cancelToken) {
     config.cancelToken.throwIfRequested();
@@ -1177,7 +1132,7 @@ function throwIfCancellationRequested(config) {
 var dispatchRequest = function dispatchRequest(config) {
   throwIfCancellationRequested(config);
   config.headers = config.headers || {};
-  config.data = transformData.call(config, config.data, config.headers, config.transformRequest);
+  config.data = transformData(config.data, config.headers, config.transformRequest);
   config.headers = utils.merge(config.headers.common || {}, config.headers[config.method] || {}, config.headers);
   utils.forEach(['delete', 'get', 'head', 'post', 'put', 'patch', 'common'], function cleanHeaderConfig(method) {
     delete config.headers[method];
@@ -1185,14 +1140,14 @@ var dispatchRequest = function dispatchRequest(config) {
   var adapter = config.adapter || defaults_1.adapter;
   return adapter(config).then(function onAdapterResolution(response) {
     throwIfCancellationRequested(config);
-    response.data = transformData.call(config, response.data, response.headers, config.transformResponse);
+    response.data = transformData(response.data, response.headers, config.transformResponse);
     return response;
   }, function onAdapterRejection(reason) {
     if (!isCancel(reason)) {
       throwIfCancellationRequested(config);
 
       if (reason && reason.response) {
-        reason.response.data = transformData.call(config, reason.response.data, reason.response.headers, config.transformResponse);
+        reason.response.data = transformData(reason.response.data, reason.response.headers, config.transformResponse);
       }
     }
 
@@ -1203,286 +1158,45 @@ var dispatchRequest = function dispatchRequest(config) {
 var mergeConfig = function mergeConfig(config1, config2) {
   config2 = config2 || {};
   var config = {};
-  var valueFromConfig2Keys = ['url', 'method', 'data'];
-  var mergeDeepPropertiesKeys = ['headers', 'auth', 'proxy', 'params'];
-  var defaultToConfig2Keys = ['baseURL', 'transformRequest', 'transformResponse', 'paramsSerializer', 'timeout', 'timeoutMessage', 'withCredentials', 'adapter', 'responseType', 'xsrfCookieName', 'xsrfHeaderName', 'onUploadProgress', 'onDownloadProgress', 'decompress', 'maxContentLength', 'maxBodyLength', 'maxRedirects', 'transport', 'httpAgent', 'httpsAgent', 'cancelToken', 'socketPath', 'responseEncoding'];
-  var directMergeKeys = ['validateStatus'];
-
-  function getMergedValue(target, source) {
-    if (utils.isPlainObject(target) && utils.isPlainObject(source)) {
-      return utils.merge(target, source);
-    } else if (utils.isPlainObject(source)) {
-      return utils.merge({}, source);
-    } else if (utils.isArray(source)) {
-      return source.slice();
-    }
-
-    return source;
-  }
-
-  function mergeDeepProperties(prop) {
-    if (!utils.isUndefined(config2[prop])) {
-      config[prop] = getMergedValue(config1[prop], config2[prop]);
-    } else if (!utils.isUndefined(config1[prop])) {
-      config[prop] = getMergedValue(undefined, config1[prop]);
-    }
-  }
-
+  var valueFromConfig2Keys = ['url', 'method', 'params', 'data'];
+  var mergeDeepPropertiesKeys = ['headers', 'auth', 'proxy'];
+  var defaultToConfig2Keys = ['baseURL', 'url', 'transformRequest', 'transformResponse', 'paramsSerializer', 'timeout', 'withCredentials', 'adapter', 'responseType', 'xsrfCookieName', 'xsrfHeaderName', 'onUploadProgress', 'onDownloadProgress', 'maxContentLength', 'validateStatus', 'maxRedirects', 'httpAgent', 'httpsAgent', 'cancelToken', 'socketPath'];
   utils.forEach(valueFromConfig2Keys, function valueFromConfig2(prop) {
-    if (!utils.isUndefined(config2[prop])) {
-      config[prop] = getMergedValue(undefined, config2[prop]);
+    if (typeof config2[prop] !== 'undefined') {
+      config[prop] = config2[prop];
     }
   });
-  utils.forEach(mergeDeepPropertiesKeys, mergeDeepProperties);
+  utils.forEach(mergeDeepPropertiesKeys, function mergeDeepProperties(prop) {
+    if (utils.isObject(config2[prop])) {
+      config[prop] = utils.deepMerge(config1[prop], config2[prop]);
+    } else if (typeof config2[prop] !== 'undefined') {
+      config[prop] = config2[prop];
+    } else if (utils.isObject(config1[prop])) {
+      config[prop] = utils.deepMerge(config1[prop]);
+    } else if (typeof config1[prop] !== 'undefined') {
+      config[prop] = config1[prop];
+    }
+  });
   utils.forEach(defaultToConfig2Keys, function defaultToConfig2(prop) {
-    if (!utils.isUndefined(config2[prop])) {
-      config[prop] = getMergedValue(undefined, config2[prop]);
-    } else if (!utils.isUndefined(config1[prop])) {
-      config[prop] = getMergedValue(undefined, config1[prop]);
+    if (typeof config2[prop] !== 'undefined') {
+      config[prop] = config2[prop];
+    } else if (typeof config1[prop] !== 'undefined') {
+      config[prop] = config1[prop];
     }
   });
-  utils.forEach(directMergeKeys, function merge(prop) {
-    if (prop in config2) {
-      config[prop] = getMergedValue(config1[prop], config2[prop]);
-    } else if (prop in config1) {
-      config[prop] = getMergedValue(undefined, config1[prop]);
-    }
-  });
-  var axiosKeys = valueFromConfig2Keys.concat(mergeDeepPropertiesKeys).concat(defaultToConfig2Keys).concat(directMergeKeys);
-  var otherKeys = Object.keys(config1).concat(Object.keys(config2)).filter(function filterAxiosKeys(key) {
+  var axiosKeys = valueFromConfig2Keys.concat(mergeDeepPropertiesKeys).concat(defaultToConfig2Keys);
+  var otherKeys = Object.keys(config2).filter(function filterAxiosKeys(key) {
     return axiosKeys.indexOf(key) === -1;
   });
-  utils.forEach(otherKeys, mergeDeepProperties);
+  utils.forEach(otherKeys, function otherKeysDefaultToConfig2(prop) {
+    if (typeof config2[prop] !== 'undefined') {
+      config[prop] = config2[prop];
+    } else if (typeof config1[prop] !== 'undefined') {
+      config[prop] = config1[prop];
+    }
+  });
   return config;
 };
-
-var name = "axios";
-var version$1 = "0.21.4";
-var description = "Promise based HTTP client for the browser and node.js";
-var main = "index.js";
-var scripts = {
-	test: "grunt test",
-	start: "node ./sandbox/server.js",
-	build: "NODE_ENV=production grunt build",
-	preversion: "npm test",
-	version: "npm run build && grunt version && git add -A dist && git add CHANGELOG.md bower.json package.json",
-	postversion: "git push && git push --tags",
-	examples: "node ./examples/server.js",
-	coveralls: "cat coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js",
-	fix: "eslint --fix lib/**/*.js"
-};
-var repository = {
-	type: "git",
-	url: "https://github.com/axios/axios.git"
-};
-var keywords = [
-	"xhr",
-	"http",
-	"ajax",
-	"promise",
-	"node"
-];
-var author = "Matt Zabriskie";
-var license = "MIT";
-var bugs = {
-	url: "https://github.com/axios/axios/issues"
-};
-var homepage = "https://axios-http.com";
-var devDependencies = {
-	coveralls: "^3.0.0",
-	"es6-promise": "^4.2.4",
-	grunt: "^1.3.0",
-	"grunt-banner": "^0.6.0",
-	"grunt-cli": "^1.2.0",
-	"grunt-contrib-clean": "^1.1.0",
-	"grunt-contrib-watch": "^1.0.0",
-	"grunt-eslint": "^23.0.0",
-	"grunt-karma": "^4.0.0",
-	"grunt-mocha-test": "^0.13.3",
-	"grunt-ts": "^6.0.0-beta.19",
-	"grunt-webpack": "^4.0.2",
-	"istanbul-instrumenter-loader": "^1.0.0",
-	"jasmine-core": "^2.4.1",
-	karma: "^6.3.2",
-	"karma-chrome-launcher": "^3.1.0",
-	"karma-firefox-launcher": "^2.1.0",
-	"karma-jasmine": "^1.1.1",
-	"karma-jasmine-ajax": "^0.1.13",
-	"karma-safari-launcher": "^1.0.0",
-	"karma-sauce-launcher": "^4.3.6",
-	"karma-sinon": "^1.0.5",
-	"karma-sourcemap-loader": "^0.3.8",
-	"karma-webpack": "^4.0.2",
-	"load-grunt-tasks": "^3.5.2",
-	minimist: "^1.2.0",
-	mocha: "^8.2.1",
-	sinon: "^4.5.0",
-	"terser-webpack-plugin": "^4.2.3",
-	typescript: "^4.0.5",
-	"url-search-params": "^0.10.0",
-	webpack: "^4.44.2",
-	"webpack-dev-server": "^3.11.0"
-};
-var browser$2 = {
-	"./lib/adapters/http.js": "./lib/adapters/xhr.js"
-};
-var jsdelivr = "dist/axios.min.js";
-var unpkg = "dist/axios.min.js";
-var typings = "./index.d.ts";
-var dependencies = {
-	"follow-redirects": "^1.14.0"
-};
-var bundlesize = [
-	{
-		path: "./dist/axios.min.js",
-		threshold: "5kB"
-	}
-];
-var _package = {
-	name: name,
-	version: version$1,
-	description: description,
-	main: main,
-	scripts: scripts,
-	repository: repository,
-	keywords: keywords,
-	author: author,
-	license: license,
-	bugs: bugs,
-	homepage: homepage,
-	devDependencies: devDependencies,
-	browser: browser$2,
-	jsdelivr: jsdelivr,
-	unpkg: unpkg,
-	typings: typings,
-	dependencies: dependencies,
-	bundlesize: bundlesize
-};
-
-var _package$1 = /*#__PURE__*/Object.freeze({
-  __proto__: null,
-  name: name,
-  version: version$1,
-  description: description,
-  main: main,
-  scripts: scripts,
-  repository: repository,
-  keywords: keywords,
-  author: author,
-  license: license,
-  bugs: bugs,
-  homepage: homepage,
-  devDependencies: devDependencies,
-  browser: browser$2,
-  jsdelivr: jsdelivr,
-  unpkg: unpkg,
-  typings: typings,
-  dependencies: dependencies,
-  bundlesize: bundlesize,
-  'default': _package
-});
-
-function createCommonjsModule(fn, basedir, module) {
-	return module = {
-	  path: basedir,
-	  exports: {},
-	  require: function (path, base) {
-      return commonjsRequire(path, (base === undefined || base === null) ? module.path : base);
-    }
-	}, fn(module, module.exports), module.exports;
-}
-
-function getCjsExportFromNamespace (n) {
-	return n && n['default'] || n;
-}
-
-function commonjsRequire () {
-	throw new Error('Dynamic requires are not currently supported by @rollup/plugin-commonjs');
-}
-
-var pkg = getCjsExportFromNamespace(_package$1);
-
-var validators = {};
-['object', 'boolean', 'number', 'function', 'string', 'symbol'].forEach(function (type, i) {
-  validators[type] = function validator(thing) {
-    return typeof thing === type || 'a' + (i < 1 ? 'n ' : ' ') + type;
-  };
-});
-var deprecatedWarnings = {};
-var currentVerArr = pkg.version.split('.');
-
-function isOlderVersion(version, thanVersion) {
-  var pkgVersionArr = thanVersion ? thanVersion.split('.') : currentVerArr;
-  var destVer = version.split('.');
-
-  for (var i = 0; i < 3; i++) {
-    if (pkgVersionArr[i] > destVer[i]) {
-      return true;
-    } else if (pkgVersionArr[i] < destVer[i]) {
-      return false;
-    }
-  }
-
-  return false;
-}
-
-validators.transitional = function transitional(validator, version, message) {
-  var isDeprecated = version && isOlderVersion(version);
-
-  function formatMessage(opt, desc) {
-    return '[Axios v' + pkg.version + '] Transitional option \'' + opt + '\'' + desc + (message ? '. ' + message : '');
-  }
-
-  return function (value, opt, opts) {
-    if (validator === false) {
-      throw new Error(formatMessage(opt, ' has been removed in ' + version));
-    }
-
-    if (isDeprecated && !deprecatedWarnings[opt]) {
-      deprecatedWarnings[opt] = true;
-      console.warn(formatMessage(opt, ' has been deprecated since v' + version + ' and will be removed in the near future'));
-    }
-
-    return validator ? validator(value, opt, opts) : true;
-  };
-};
-
-function assertOptions(options, schema, allowUnknown) {
-  if (typeof options !== 'object') {
-    throw new TypeError('options must be an object');
-  }
-
-  var keys = Object.keys(options);
-  var i = keys.length;
-
-  while (i-- > 0) {
-    var opt = keys[i];
-    var validator = schema[opt];
-
-    if (validator) {
-      var value = options[opt];
-      var result = value === undefined || validator(value, opt, options);
-
-      if (result !== true) {
-        throw new TypeError('option ' + opt + ' must be ' + result);
-      }
-
-      continue;
-    }
-
-    if (allowUnknown !== true) {
-      throw Error('Unknown option ' + opt);
-    }
-  }
-}
-
-var validator = {
-  isOlderVersion: isOlderVersion,
-  assertOptions: assertOptions,
-  validators: validators
-};
-
-var validators$1 = validator.validators;
 
 function Axios(instanceConfig) {
   this.defaults = instanceConfig;
@@ -1510,67 +1224,17 @@ Axios.prototype.request = function request(config) {
     config.method = 'get';
   }
 
-  var transitional = config.transitional;
-
-  if (transitional !== undefined) {
-    validator.assertOptions(transitional, {
-      silentJSONParsing: validators$1.transitional(validators$1.boolean, '1.0.0'),
-      forcedJSONParsing: validators$1.transitional(validators$1.boolean, '1.0.0'),
-      clarifyTimeoutError: validators$1.transitional(validators$1.boolean, '1.0.0')
-    }, false);
-  }
-
-  var requestInterceptorChain = [];
-  var synchronousRequestInterceptors = true;
+  var chain = [dispatchRequest, undefined];
+  var promise = Promise.resolve(config);
   this.interceptors.request.forEach(function unshiftRequestInterceptors(interceptor) {
-    if (typeof interceptor.runWhen === 'function' && interceptor.runWhen(config) === false) {
-      return;
-    }
-
-    synchronousRequestInterceptors = synchronousRequestInterceptors && interceptor.synchronous;
-    requestInterceptorChain.unshift(interceptor.fulfilled, interceptor.rejected);
+    chain.unshift(interceptor.fulfilled, interceptor.rejected);
   });
-  var responseInterceptorChain = [];
   this.interceptors.response.forEach(function pushResponseInterceptors(interceptor) {
-    responseInterceptorChain.push(interceptor.fulfilled, interceptor.rejected);
+    chain.push(interceptor.fulfilled, interceptor.rejected);
   });
-  var promise;
 
-  if (!synchronousRequestInterceptors) {
-    var chain = [dispatchRequest, undefined];
-    Array.prototype.unshift.apply(chain, requestInterceptorChain);
-    chain = chain.concat(responseInterceptorChain);
-    promise = Promise.resolve(config);
-
-    while (chain.length) {
-      promise = promise.then(chain.shift(), chain.shift());
-    }
-
-    return promise;
-  }
-
-  var newConfig = config;
-
-  while (requestInterceptorChain.length) {
-    var onFulfilled = requestInterceptorChain.shift();
-    var onRejected = requestInterceptorChain.shift();
-
-    try {
-      newConfig = onFulfilled(newConfig);
-    } catch (error) {
-      onRejected(error);
-      break;
-    }
-  }
-
-  try {
-    promise = dispatchRequest(newConfig);
-  } catch (error) {
-    return Promise.reject(error);
-  }
-
-  while (responseInterceptorChain.length) {
-    promise = promise.then(responseInterceptorChain.shift(), responseInterceptorChain.shift());
+  while (chain.length) {
+    promise = promise.then(chain.shift(), chain.shift());
   }
 
   return promise;
@@ -1583,16 +1247,15 @@ Axios.prototype.getUri = function getUri(config) {
 
 utils.forEach(['delete', 'get', 'head', 'options'], function forEachMethodNoData(method) {
   Axios.prototype[method] = function (url, config) {
-    return this.request(mergeConfig(config || {}, {
+    return this.request(utils.merge(config || {}, {
       method: method,
-      url: url,
-      data: (config || {}).data
+      url: url
     }));
   };
 });
 utils.forEach(['post', 'put', 'patch'], function forEachMethodWithData(method) {
   Axios.prototype[method] = function (url, data, config) {
-    return this.request(mergeConfig(config || {}, {
+    return this.request(utils.merge(config || {}, {
       method: method,
       url: url,
       data: data
@@ -1657,10 +1320,6 @@ var spread = function spread(callback) {
   };
 };
 
-var isAxiosError = function isAxiosError(payload) {
-  return typeof payload === 'object' && payload.isAxiosError === true;
-};
-
 function createInstance(defaultConfig) {
   var context = new Axios_1(defaultConfig);
   var instance = bind(Axios_1.prototype.request, context);
@@ -1685,7 +1344,6 @@ axios.all = function all(promises) {
 };
 
 axios.spread = spread;
-axios.isAxiosError = isAxiosError;
 var axios_1 = axios;
 var _default = axios;
 axios_1.default = _default;
@@ -1738,6 +1396,16 @@ function storageDecode(value, encodingType) {
   } else {
     return JSON.parse($window.atob(decodeURIComponent(escape(value))));
   }
+}
+function getDisplayMode() {
+  let display = 'browser';
+  const mqStandAlone = '(display-mode: standalone)';
+
+  if ($navigator.standalone || typeof $window.matchMedia == 'function' && $window.matchMedia(mqStandAlone).matches) {
+    display = 'standalone';
+  }
+
+  return display;
 }
 
 function performRequest(endpoint, options) {
@@ -1889,7 +1557,7 @@ var defaultOptions = {
   userStorage: 'user',
   debug: false,
   reqIndex: 1,
-  sdkVersion: '1.0.50',
+  sdkVersion: '1.1.0',
   appVersion: '-',
   defaultConfig: {},
   tokenOverride: false,
@@ -1897,7 +1565,8 @@ var defaultOptions = {
   requestAdapterName: null,
   tokenFallback: false,
   localStorageObject: null,
-  localStorageEncode: 'complex'
+  localStorageEncode: 'complex',
+  localStorageAsync: false
 };
 
 var apiErrors = {
@@ -1920,6 +1589,20 @@ var apiErrors = {
   IDENTITY_EMAIL_CONFLICT: 905,
   IDENTITY_MISSING_GROUP: 906
 };
+
+function createCommonjsModule(fn, basedir, module) {
+	return module = {
+	  path: basedir,
+	  exports: {},
+	  require: function (path, base) {
+      return commonjsRequire(path, (base === undefined || base === null) ? module.path : base);
+    }
+	}, fn(module, module.exports), module.exports;
+}
+
+function commonjsRequire () {
+	throw new Error('Dynamic requires are not currently supported by @rollup/plugin-commonjs');
+}
 
 var crypt = createCommonjsModule(function (module) {
   (function () {
@@ -2193,9 +1876,41 @@ class LocalStorage {
 
 }
 
+class AsyncLocalStorage {
+  constructor(namespace) {
+    this.namespace = namespace || null;
+    this.origin = $window.location && $window.location.origin ? md5($window.location.origin).substr(0, 8) : null;
+  }
+
+  setItem(key, value) {
+    $window.localStorage.setItem(this._getStorageKey(key), value);
+  }
+
+  getItem(key) {
+    return Promise.resolve($window.localStorage.getItem(this._getStorageKey(key)));
+  }
+
+  removeItem(key) {
+    $window.localStorage.removeItem(this._getStorageKey(key));
+  }
+
+  _getStorageKey(key) {
+    if (this.namespace) {
+      return [this.origin, this.namespace, key].join('.');
+    }
+
+    return key;
+  }
+
+}
+
 function StorageFactory(options) {
   if (null !== options.localStorageObject) {
     return options.localStorageObject;
+  }
+
+  if (options.debug && options.localStorageAsync) {
+    console.log('Using AsyncLocalStorage');
   }
 
   switch (options.storageType) {
@@ -2203,11 +1918,11 @@ function StorageFactory(options) {
       try {
         $window.localStorage.setItem('testKey', 'test');
         $window.localStorage.removeItem('testKey');
-        return new LocalStorage(options.storageNamespace);
+        return options.localStorageAsync ? new AsyncLocalStorage(options.storageNamespace) : new LocalStorage(options.storageNamespace);
       } catch (e) {}
 
     default:
-      return new LocalStorage(options.storageNamespace);
+      return options.localStorageAsync ? new AsyncLocalStorage(options.storageNamespace) : new LocalStorage(options.storageNamespace);
   }
 }
 
@@ -2765,33 +2480,33 @@ class Trace extends Base {
 
 }
 
-var name$1 = "previolet";
-var version$2 = "1.0.50";
-var description$1 = "Previolet Javascript SDK";
-var main$1 = "dist/previolet-sdk.js";
+var name = "previolet";
+var version$1 = "1.1.0";
+var description = "Previolet Javascript SDK";
+var main = "dist/previolet-sdk.js";
 var module = "dist/previolet-sdk.common.js";
-var unpkg$1 = "dist/previolet-sdk.min.js";
-var scripts$1 = {
+var unpkg = "dist/previolet-sdk.min.js";
+var scripts = {
 	dev: "cross-env NODE_ENV=development webpack-dev-server --open --host 0.0.0.0 --config ./webpack.config.js",
 	build: "rollup --config"
 };
-var keywords$1 = [
+var keywords = [
 	"previolet",
 	"authentication",
 	"database",
 	"storage",
 	"remote-config"
 ];
-var author$1 = "Mark Simons <msimons9740@gmail.com> (https://previolet.com)";
-var repository$1 = {
+var author = "Mark Simons <msimons9740@gmail.com> (https://previolet.com)";
+var repository = {
 	type: "git",
 	url: "git+https://github.com/previolet/previolet-js-sdk.git"
 };
 var files = [
 	"dist"
 ];
-var license$1 = "MIT";
-var devDependencies$1 = {
+var license = "MIT";
+var devDependencies = {
 	"@babel/plugin-proposal-async-generator-functions": "^7.13.15",
 	"@rollup/plugin-commonjs": "^14.0.0",
 	"@rollup/plugin-json": "^4.1.0",
@@ -2816,40 +2531,41 @@ var tags = [
 	"storage",
 	"remote-config"
 ];
-var dependencies$1 = {
+var dependencies = {
 	"@babel/plugin-proposal-object-rest-spread": "^7.13.8",
 	"@rollup/plugin-babel": "^5.3.0",
 	axios: "^0.21.4",
 	md5: "^2.3.0"
 };
-var bugs$1 = {
+var bugs = {
 	url: "https://github.com/previolet/previolet-js-sdk/issues"
 };
-var homepage$1 = "https://github.com/previolet/previolet-js-sdk#readme";
+var homepage = "https://github.com/previolet/previolet-js-sdk#readme";
 var packageData = {
-	name: name$1,
-	version: version$2,
-	description: description$1,
-	main: main$1,
+	name: name,
+	version: version$1,
+	description: description,
+	main: main,
 	module: module,
-	unpkg: unpkg$1,
-	scripts: scripts$1,
-	keywords: keywords$1,
-	author: author$1,
-	repository: repository$1,
+	unpkg: unpkg,
+	scripts: scripts,
+	keywords: keywords,
+	author: author,
+	repository: repository,
 	files: files,
-	license: license$1,
-	devDependencies: devDependencies$1,
+	license: license,
+	devDependencies: devDependencies,
 	tags: tags,
-	dependencies: dependencies$1,
-	bugs: bugs$1,
-	homepage: homepage$1
+	dependencies: dependencies,
+	bugs: bugs,
+	homepage: homepage
 };
 
 class PrevioletSDK {
   constructor(overrideOptions) {
     const vm = this;
     let options = Object.assign({}, defaultOptions, overrideOptions);
+    vm.options = options;
 
     if (options.debug) {
       console.log(`%cPreviolet Javascript SDK (v${packageData.version}) instantiated in debug mode`, 'color: #CC00FF');
@@ -2918,16 +2634,30 @@ class PrevioletSDK {
     let token = false;
     let currentApp = null;
     let currentUser = null;
+    let browserIdentification = null;
     let headers = {};
-    this.changeHooks = [];
+    vm.changeHooks = [];
+    let baseline_identification = {
+      ua: $navigator.userAgent,
+      lang: $navigator.language || $navigator.userLanguage,
+      plat: $navigator.platform,
+      vsdk: vm.options.sdkVersion,
+      vapp: vm.options.appVersion,
+      ver: vm.options.version,
+      dspm: getDisplayMode()
+    };
 
-    this.onAuthDataCallback = data => {
+    if (typeof __previoletRayId !== 'undefined') {
+      baseline_identification.ray = __previoletRayId;
+    }
+
+    vm.onAuthDataCallback = data => {
       return data;
     };
 
-    this.storageApi = StorageFactory(options);
+    vm.storageApi = StorageFactory(options);
 
-    this.auth = () => {
+    vm.auth = () => {
       return {
         GithubAuthProvider: {
           id: 'github'
@@ -3009,8 +2739,8 @@ class PrevioletSDK {
           });
         },
         loginWithIdentityProvider: (provider, access_token) => {
-          access_token = access_token || this.last_access_token;
-          this.last_access_token = access_token;
+          access_token = access_token || this.lastAccessToken;
+          this.lastAccessToken = access_token;
 
           if (this.options.debug) {
             console.log('Logging In with identity provider:', provider, access_token);
@@ -3100,9 +2830,9 @@ class PrevioletSDK {
           });
         },
         registerWithIdentityProvider: (provider, email, access_token, trigger_login) => {
-          access_token = access_token || this.last_access_token;
+          access_token = access_token || this.lastAccessToken;
           trigger_login = trigger_login || true;
-          this.last_access_token = access_token;
+          this.lastAccessToken = access_token;
           const data = {
             access_token,
             email,
@@ -3156,7 +2886,9 @@ class PrevioletSDK {
             return ret.result.data;
           });
         },
-        onAuthStateChanged: callback => {
+        onAuthStateChanged: async callback => {
+          await vm.resourcesToLoad;
+
           if (typeof callback == 'function') {
             if (vm.changeHooks.indexOf(callback) == -1) {
               if (vm.options.debug) {
@@ -3208,17 +2940,7 @@ class PrevioletSDK {
       };
     };
 
-    Object.defineProperties(this, {
-      options: {
-        get() {
-          return options;
-        },
-
-        set(value) {
-          options = value;
-        }
-
-      },
+    Object.defineProperties(vm, {
       token: {
         get() {
           return token;
@@ -3247,7 +2969,10 @@ class PrevioletSDK {
 
         set(value) {
           currentApp = value;
-          vm.storageApi.setItem(options.applicationStorage, storageEncode(value, options.localStorageEncode));
+
+          if (vm.initialSetupCompleted) {
+            vm.storageApi.setItem(options.applicationStorage, storageEncode(value, options.localStorageEncode));
+          }
         }
 
       },
@@ -3259,89 +2984,29 @@ class PrevioletSDK {
         set(value) {
           currentUser = value;
 
-          if (this.options.debug) {
-            console.log('Setting current user information:', value);
+          if (vm.initialSetupCompleted) {
+            vm.storageApi.setItem(options.userStorage, storageEncode(value, options.localStorageEncode));
           }
-
-          vm.storageApi.setItem(options.userStorage, storageEncode(value, options.localStorageEncode));
         }
 
       },
       browserIdentification: {
         get() {
-          return vm.__storageGet(vm.options.browserIdentification);
+          return browserIdentification;
         },
 
         set(value) {
-          value.ts = value.ts || Date.now();
-          value.rnd = value.rnd || generateRandomNumber(100000, 999999);
-          vm.storageApi.setItem(options.browserIdentification, storageEncode(value, options.localStorageEncode));
-        }
+          browserIdentification = value;
 
-      },
-      displayMode: {
-        get() {
-          let display = 'browser';
-          const mqStandAlone = '(display-mode: standalone)';
-
-          if ($navigator.standalone || typeof $window.matchMedia == 'function' && $window.matchMedia(mqStandAlone).matches) {
-            display = 'standalone';
+          if (vm.initialSetupCompleted) {
+            value.ts = value.ts || Date.now();
+            value.rnd = value.rnd || generateRandomNumber(100000, 999999);
+            vm.storageApi.setItem(options.browserIdentification, storageEncode(value, options.localStorageEncode));
           }
-
-          return display;
         }
 
       }
     });
-
-    vm.app = () => {
-      return {
-        region: vm.options.region,
-        token: vm.storageApi.getItem(vm.options.tokenName) || false,
-        data: vm.__storageGet(vm.options.applicationStorage)
-      };
-    };
-
-    let _stored_token = vm.app().token;
-    vm.token = _stored_token;
-    let baseline_identification = {
-      ua: $navigator.userAgent,
-      lang: $navigator.language || $navigator.userLanguage,
-      plat: $navigator.platform,
-      vsdk: vm.options.sdkVersion,
-      vapp: vm.options.appVersion,
-      ver: vm.options.version,
-      dspm: vm.displayMode
-    };
-
-    if (typeof __previoletRayId !== 'undefined') {
-      baseline_identification.ray = __previoletRayId;
-    }
-
-    if (!vm.browserIdentification) {
-      vm.browserIdentification = _objectSpread2({}, baseline_identification);
-
-      if (vm.options.debug) {
-        console.log('Generating browser identification', vm.browserIdentification);
-      }
-    } else {
-      if (vm.options.debug) {
-        console.log('Browser identification exists', vm.browserIdentification);
-      }
-
-      let match = _objectSpread2(_objectSpread2({}, baseline_identification), {}, {
-        ts: vm.browserIdentification.ts,
-        rnd: vm.browserIdentification.rnd
-      });
-
-      if (JSON.stringify(match) != JSON.stringify(vm.browserIdentification)) {
-        if (vm.options.debug) {
-          console.log('Browser identification changed, renewing', match);
-        }
-
-        vm.browserIdentification = match;
-      }
-    }
 
     let __db = new Database(vm).addToErrorChain(vm, vm.__checkError);
 
@@ -3379,17 +3044,61 @@ class PrevioletSDK {
       return __trace;
     };
 
-    vm.user = () => {
-      return {
-        data: vm.__storageGet(vm.options.userStorage)
-      };
-    };
-
     vm.version = () => {
       return vm.options.sdkVersion;
     };
 
-    vm.currentUser = vm.user().data;
+    vm.app = () => {
+      return {
+        region: vm.options.region,
+        token: vm.token,
+        data: vm.currentApp
+      };
+    };
+
+    vm.user = () => {
+      return {
+        data: vm.currentUser
+      };
+    };
+
+    const fetchStoredResources = async vm => {
+      let [_token, _currentUser, _currentApp, _browserIdentification] = await Promise.all([vm.storageApi.getItem(vm.options.tokenName), vm.__storageGet(vm.options.userStorage), vm.__storageGet(vm.options.applicationStorage), vm.__storageGet(vm.options.browserIdentification)]);
+      vm.token = _token;
+      vm.currentUser = _currentUser;
+      vm.currentApp = _currentApp;
+      vm.browserIdentification = _browserIdentification;
+
+      if (!vm.browserIdentification) {
+        vm.browserIdentification = _objectSpread2({}, baseline_identification);
+
+        if (vm.options.debug) {
+          console.log('Generating browser identification', vm.browserIdentification);
+        }
+      } else {
+        if (vm.options.debug) {
+          console.log('Browser identification exists: ', vm.browserIdentification);
+        }
+
+        let match = _objectSpread2(_objectSpread2({}, baseline_identification), {}, {
+          ts: vm.browserIdentification.ts,
+          rnd: vm.browserIdentification.rnd
+        });
+
+        if (JSON.stringify(match) != JSON.stringify(vm.browserIdentification)) {
+          if (vm.options.debug) {
+            console.log('Browser identification changed, renewing', match);
+          }
+
+          vm.browserIdentification = match;
+        }
+      }
+
+      vm.initialSetupCompleted = true;
+      return Promise.resolve(true);
+    };
+
+    vm.resourcesToLoad = fetchStoredResources(vm);
   }
 
   getDefaultHeaders() {
@@ -3473,20 +3182,20 @@ class PrevioletSDK {
     }
   }
 
-  __storageGet(key) {
+  async __storageGet(key) {
     const vm = this;
+    let encodedData = await vm.storageApi.getItem(key);
+    let decodedData = false;
 
-    let _storage = vm.storageApi.getItem(key);
-
-    let _storage_data = false;
-
-    if (_storage) {
+    if (encodedData) {
       try {
-        _storage_data = storageDecode(_storage, vm.options.localStorageEncode);
-      } catch (e) {}
+        decodedData = storageDecode(encodedData, vm.options.localStorageEncode);
+      } catch (e) {
+        console.log('Error decoding data', e);
+      }
     }
 
-    return _storage_data;
+    return Promise.resolve(decodedData);
   }
 
   __checkError(context, response) {
