@@ -6,7 +6,7 @@ const sdk = new PrevioletSDK({
   instance: DEMO_INSTANCE,
   appVersion: '1.0.0',
   debug: true,
-  localStorageAsync: true,
+  region: 'eu.east1',
   // requestAdapterName: 'fetch',
   // localStorageEncode: 'json'
 })
@@ -243,6 +243,10 @@ var router = new VueRouter({
             if (user) {
               vm.authenticated = true
               vm.loadData()
+
+              // sdk.db().select('todo').messages().get('5de7ce1ec1ed7c00de5e4c83').then(ret => console.log(ret))
+              // sdk.db().select('todo').messages().delete('6287883dbbaf9200be47c8b2').then(ret => console.log(ret))
+              // sdk.db().select('todo').messages().add('5de7ce1ec1ed7c00de5e4c83', 'test message').then(ret => console.log(ret))
             } else {
               vm.authenticated = false
               vm.registerProcess.start = false

@@ -8,7 +8,7 @@ class AsyncLocalStorage {
   }
 
   setItem(key, value) {
-    $window.localStorage.setItem(this._getStorageKey(key), value)
+    return Promise.resolve($window.localStorage.setItem(this._getStorageKey(key), value))
   }
 
   getItem(key) {
@@ -16,7 +16,7 @@ class AsyncLocalStorage {
   }
 
   removeItem(key) {
-    $window.localStorage.removeItem(this._getStorageKey(key))
+    return Promise.resolve($window.localStorage.removeItem(this._getStorageKey(key)))
   }
 
   _getStorageKey(key) {

@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.1.1
+ * Previolet Javascript SDK v1.1.2
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1557,7 +1557,7 @@ var defaultOptions = {
   userStorage: 'user',
   debug: false,
   reqIndex: 1,
-  sdkVersion: '1.1.1',
+  sdkVersion: '1.1.2',
   appVersion: '-',
   defaultConfig: {},
   tokenOverride: false,
@@ -1883,7 +1883,7 @@ class AsyncLocalStorage {
   }
 
   setItem(key, value) {
-    $window.localStorage.setItem(this._getStorageKey(key), value);
+    return Promise.resolve($window.localStorage.setItem(this._getStorageKey(key), value));
   }
 
   getItem(key) {
@@ -1891,7 +1891,7 @@ class AsyncLocalStorage {
   }
 
   removeItem(key) {
-    $window.localStorage.removeItem(this._getStorageKey(key));
+    return Promise.resolve($window.localStorage.removeItem(this._getStorageKey(key)));
   }
 
   _getStorageKey(key) {
@@ -2070,6 +2070,10 @@ class Database extends Base {
   select(database) {
     this.currentDatabase = database;
     return this;
+  }
+
+  getSelected() {
+    return this.currentDatabase;
   }
 
   add(data) {
@@ -2254,6 +2258,82 @@ class Database extends Base {
 
       return ret.result ? ret.result : ret;
     });
+  }
+
+  messages() {
+    const vm = this;
+
+    if (null === vm.currentDatabase) {
+      return Promise.reject(new Error('Please select a database'));
+    }
+
+    return {
+      add(id, message) {
+        if (!id) {
+          return Promise.reject(new Error('Please specify a record Id'));
+        }
+
+        let data = {
+          database: vm.currentDatabase,
+          record_id: id,
+          message
+        };
+        const options = {
+          method: 'POST',
+          data
+        };
+        return vm.__call(`/__/message-stream`, options).then(ret => ret.result || []);
+      },
+
+      notify(id, email, message, type) {
+        if (!id) {
+          return Promise.reject(new Error('Please specify a record Id'));
+        }
+
+        type = type || 'mention';
+        let data = {
+          database: vm.currentDatabase,
+          record_id: id,
+          message: {
+            content: [message]
+          },
+          from: vm.currentUser,
+          to: {
+            email
+          },
+          type
+        };
+        const options = {
+          method: 'POST',
+          data
+        };
+        return vm.__call(`/__/message-stream/${vm.currentDatabase}/${id}/notify`, options).then(ret => ret.result || []);
+      },
+
+      get(id, params) {
+        if (!id) {
+          return Promise.reject(new Error('Please specify a record Id'));
+        }
+
+        const options = {
+          method: 'GET',
+          params
+        };
+        return vm.__call(`/__/message-stream/${vm.currentDatabase}/${id}`, options).then(ret => ret.result || []);
+      },
+
+      delete(id) {
+        if (!id) {
+          return Promise.reject(new Error('Please specify a record Id'));
+        }
+
+        const options = {
+          method: 'DELETE'
+        };
+        return vm.__call(`/__/message-stream/${id}`, options).then(ret => ret.result);
+      }
+
+    };
   }
 
   getDistinctCount(field, params) {}
@@ -2481,7 +2561,7 @@ class Trace extends Base {
 }
 
 var name = "previolet";
-var version$1 = "1.1.1";
+var version$1 = "1.1.2";
 var description = "Previolet Javascript SDK";
 var main = "dist/previolet-sdk.js";
 var module = "dist/previolet-sdk.common.js";
