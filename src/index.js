@@ -488,7 +488,11 @@ export default class PrevioletSDK {
         set(value) {
           browserIdentification = value
 
-          if (vm.initialSetupCompleted || true) {
+          if (options.debug) {
+            console.log('Setting brower identification', value)
+          }
+
+          if (value) {
             value.ts = value.ts || Date.now()
             value.rnd = value.rnd || generateRandomNumber(100000, 999999)
             vm.storageApi.setItem(options.browserIdentification, storageEncode(value, options.localStorageEncode))

@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.1.3
+ * Previolet Javascript SDK v1.1.4
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1560,7 +1560,7 @@ var PrevioletSDK = (function (exports) {
     userStorage: 'user',
     debug: false,
     reqIndex: 1,
-    sdkVersion: '1.1.3',
+    sdkVersion: '1.1.4',
     appVersion: '-',
     defaultConfig: {},
     tokenOverride: false,
@@ -2564,7 +2564,7 @@ var PrevioletSDK = (function (exports) {
   }
 
   var name = "previolet";
-  var version$1 = "1.1.3";
+  var version$1 = "1.1.4";
   var description = "Previolet Javascript SDK";
   var main = "dist/previolet-sdk.js";
   var module = "dist/previolet-sdk.common.js";
@@ -3081,7 +3081,11 @@ var PrevioletSDK = (function (exports) {
           set(value) {
             browserIdentification = value;
 
-            if (vm.initialSetupCompleted || true) {
+            if (options.debug) {
+              console.log('Setting brower identification', value);
+            }
+
+            if (value) {
               value.ts = value.ts || Date.now();
               value.rnd = value.rnd || generateRandomNumber(100000, 999999);
               vm.storageApi.setItem(options.browserIdentification, storageEncode(value, options.localStorageEncode));
