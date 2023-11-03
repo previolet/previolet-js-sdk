@@ -73,12 +73,12 @@ export default class PrevioletSDK {
     }
 
     if (options.instance == prependFallback + 'options.instance %>') {
-      // ...
-      if (process && process.env && process.env.PREVIOLET_INSTANCE) {
-        console.log('Using environment variable as instance', process.env.PREVIOLET_INSTANCE)
-        options.instance = process.env.PREVIOLET_INSTANCE
+      const envSource = process.env.PREVIOLET_INSTANCE || process.env.VUE_APP_PREVIOLET_INSTANCE
+      if (process && process.env && envSource) {
+        console.log('Using environment variable as instance', envSource)
+        options.instance = envSource
       } else {
-        console.log('PREVIOLET_INSTANCE environment variable not found')
+        console.log('PREVIOLET_INSTANCE or VUE_APP_PREVIOLET_INSTANCE environment variable not found')
       }
     }
 

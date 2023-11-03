@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.1.5
+ * Previolet Javascript SDK v1.1.6
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1680,7 +1680,7 @@ var defaultOptions = {
   userStorage: 'user',
   debug: false,
   reqIndex: 1,
-  sdkVersion: '1.1.5',
+  sdkVersion: '1.1.6',
   appVersion: '-',
   defaultConfig: {},
   tokenOverride: false,
@@ -2514,7 +2514,7 @@ class Trace extends Base {
 }
 
 var name$1 = "previolet";
-var version$2 = "1.1.5";
+var version$2 = "1.1.6";
 var description$1 = "Previolet Javascript SDK";
 var main$1 = "dist/previolet-sdk.js";
 var module$1 = "dist/previolet-sdk.common.js";
@@ -2641,9 +2641,10 @@ class PrevioletSDK {
       }
     }
     if (options.instance == prependFallback + 'options.instance %>') {
-      if (process && process.env && process.env.PREVIOLET_INSTANCE) {
-        console.log('Using environment variable as instance', process.env.PREVIOLET_INSTANCE);
-        options.instance = process.env.PREVIOLET_INSTANCE;
+      const envSource = process.env.PREVIOLET_INSTANCE || process.env.VUE_APP_PREVIOLET_INSTANCE;
+      if (process && process.env && envSource) {
+        console.log('Using environment variable as instance', envSource);
+        options.instance = envSource;
       } else {
         console.log('PREVIOLET_INSTANCE environment variable not found');
       }
