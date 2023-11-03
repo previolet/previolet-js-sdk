@@ -19,12 +19,14 @@ export default class PrevioletSDK {
     let options = Object.assign({}, defaultOptions, overrideOptions)
     vm.options = options
 
+    let prependFallback = '<%= previolet' + String.fromCharCode(46) // '<%= previolet.'
+
     if (options.debug) {
       console.log(`%cPreviolet Javascript SDK (v${packageData.version}) instantiated in debug mode`, 'color: #CC00FF')
     }
 
     if (options.instance && 
-        options.instance == '<%= previolet.options.instance %>' && 
+        options.instance == prependFallback + 'options.instance %>' && 
         options.fallback && 
         options.fallback.instance) {
       if (options.debug) {
@@ -38,7 +40,7 @@ export default class PrevioletSDK {
       throw 'Cannot define both tokenFallback and tokenOverride'
     }
 
-    if (options.tokenFallback && options.tokenFallback == '<%= previolet.token.guest %>') {
+    if (options.tokenFallback && options.tokenFallback == prependFallback + 'token.guest %>') {
       if (options.fallback && options.fallback.tokenFallback) {
         if (options.debug) {
           console.log('Using fallback tokenFallback', options.fallback.tokenFallback)
@@ -54,7 +56,7 @@ export default class PrevioletSDK {
       }
     }
 
-    if (options.tokenOverride && options.tokenOverride == '<%= previolet.token.guest %>') {
+    if (options.tokenOverride && options.tokenOverride == prependFallback + 'token.guest %>') {
       if (options.fallback && options.fallback.tokenOverride) {
         if (options.debug) {
           console.log('Using fallback tokenOverride', options.fallback.tokenOverride)
@@ -67,6 +69,16 @@ export default class PrevioletSDK {
         }
 
         options.tokenOverride = false
+      }
+    }
+
+    if (options.instance == prependFallback + 'options.instance %>') {
+      // ...
+      if (process && process.env && process.env.PREVIOLET_INSTANCE) {
+        console.log('Using environment variable as instance', process.env.PREVIOLET_INSTANCE)
+        options.instance = process.env.PREVIOLET_INSTANCE
+      } else {
+        console.log('PREVIOLET_INSTANCE environment variable not found')
       }
     }
 
@@ -340,7 +352,11 @@ export default class PrevioletSDK {
         },
 
         isAuthenticated: () => {
-          let token = vm.token
+          let token = this.token
+
+          if (typeof token == 'string' && token === 'null') {
+            return false
+          }
 
           if (token) {
             return true
@@ -380,7 +396,6 @@ export default class PrevioletSDK {
           await vm.resourcesToLoad
 
           if (typeof callback == 'function') {
-
             if (vm.changeHooks.indexOf(callback) == -1) {
               if (vm.options.debug) {
                 console.log('Registered callback function: onAuthStateChanged', callback)

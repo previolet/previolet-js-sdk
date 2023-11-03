@@ -1,6 +1,6 @@
 {
   "name": "previolet",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Previolet Javascript SDK",
   "main": "dist/previolet-sdk.js",
   "module": "dist/previolet-sdk.common.js",
@@ -32,6 +32,7 @@
     "@rollup/plugin-node-resolve": "^8.4.0",
     "@rollup/plugin-replace": "^2.3.4",
     "cross-env": "^7.0.3",
+    "eslint": "^6.7.2",
     "moment": "^2.29.1",
     "rollup": "^2.34.1",
     "rollup-plugin-banner": "^0.2.1",
@@ -51,8 +52,9 @@
     "remote-config"
   ],
   "dependencies": {
+    "@babel/core": "^7.20.12",
     "@babel/plugin-proposal-object-rest-spread": "^7.13.8",
-    "@rollup/plugin-babel": "^5.3.0",
+    "@rollup/plugin-babel": "^5.3.1",
     "axios": "^0.21.4",
     "md5": "^2.3.0"
   },
