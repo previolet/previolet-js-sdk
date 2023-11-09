@@ -1,5 +1,5 @@
 /**
- * Previolet Javascript SDK v1.1.6
+ * Previolet Javascript SDK v1.1.7
  * https://github.com/previolet/previolet-js-sdk
  * Released under the MIT License.
  */
@@ -1678,7 +1678,7 @@ define(['exports'], function (exports) { 'use strict';
     userStorage: 'user',
     debug: false,
     reqIndex: 1,
-    sdkVersion: '1.1.6',
+    sdkVersion: '1.1.7',
     appVersion: '-',
     defaultConfig: {},
     tokenOverride: false,
@@ -2419,7 +2419,9 @@ define(['exports'], function (exports) { 'use strict';
         if (resize) {
           url = url.replace('__/storage/static/', '__/storage/static/w_250/');
         }
-        url = url.indexOf('?') == -1 ? url + '?token=' + this.__getTokenToUse() : url + '&token=' + this.__getTokenToUse();
+        if (url.indexOf('?token=') == -1 && url.indexOf('&token=') == -1) {
+          url = url.indexOf('?') == -1 ? url + '?token=' + this.__getTokenToUse() : url + '&token=' + this.__getTokenToUse();
+        }
       }
       return url;
     }
@@ -2512,7 +2514,7 @@ define(['exports'], function (exports) { 'use strict';
   }
 
   var name$1 = "previolet";
-  var version$2 = "1.1.6";
+  var version$2 = "1.1.7";
   var description$1 = "Previolet Javascript SDK";
   var main$1 = "dist/previolet-sdk.js";
   var module = "dist/previolet-sdk.common.js";
@@ -2644,7 +2646,7 @@ define(['exports'], function (exports) { 'use strict';
           console.log('Using environment variable as instance', envSource);
           options.instance = envSource;
         } else {
-          console.log('PREVIOLET_INSTANCE environment variable not found');
+          console.log('PREVIOLET_INSTANCE or VUE_APP_PREVIOLET_INSTANCE environment variable not found');
         }
       }
       if (options.requestAdapterName == 'fetch') {

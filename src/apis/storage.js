@@ -47,7 +47,9 @@ export default class Storage extends Base {
         url = url.replace('__/storage/static/', '__/storage/static/w_250/')
       }
 
-      url = url.indexOf('?') == -1 ? url + '?token=' + this.__getTokenToUse() : url + '&token=' + this.__getTokenToUse()
+      if (url.indexOf('?token=') == -1 && url.indexOf('&token=') == -1) {
+        url = url.indexOf('?') == -1 ? url + '?token=' + this.__getTokenToUse() : url + '&token=' + this.__getTokenToUse()
+      }
     }
 
     return url
